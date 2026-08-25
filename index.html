@@ -253,7 +253,7 @@
       cursor: pointer;
     }
     #pngBtn:hover { background: var(--box); }
-    #saveBtn {
+    #saveBtn, #sheetBtn, #codexBtn {
       width: 100%;
       margin-top: 8px;
       background: transparent;
@@ -267,7 +267,40 @@
       text-transform: uppercase;
       cursor: pointer;
     }
-    #saveBtn:hover { background: #2c2418; }
+    #codexBtn {
+      background: var(--kraft);
+      color: var(--ink);
+      border: 0;
+    }
+    #codexBtn:hover { background: var(--box); }
+    #codexBtn:disabled, #sheetBtn:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+    #saveBtn:hover, #sheetBtn:hover { background: #2c2418; }
+    .shot-card {
+      display: grid;
+      grid-template-columns: 132px 1fr;
+      gap: 10px;
+      align-items: start;
+      max-width: 100%;
+    }
+    .shot-card img {
+      width: 132px;
+      height: 88px;
+      object-fit: cover;
+      background: #14110e;
+      border: 1px solid var(--line);
+    }
+    .shot-card strong { display: block; margin-bottom: 4px; }
+    .shot-card button {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--paper);
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 11px;
+    }
     #mockupList { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
     .mockup-row {
       display: grid;
@@ -501,6 +534,8 @@
       <table id="variantsTable"></table>
     </div>
     <button type="button" id="pngBtn">Download PNG</button>
+    <button type="button" id="codexBtn">Codex shots</button>
+    <button type="button" id="sheetBtn">Export sheet</button>
     <button type="button" id="saveBtn">Save mockup</button>
   </aside>
 
@@ -552,6 +587,8 @@
       fill: $("fill"),
       note: $("note"),
       pngBtn: $("pngBtn"),
+      codexBtn: $("codexBtn"),
+      sheetBtn: $("sheetBtn"),
       saveBtn: $("saveBtn"),
       mockupList: $("mockupList"),
       pcsPerPack: $("pcsPerPack"),
@@ -947,6 +984,7 @@
 
     let lastCartonKey = "";
     let lastResult = null;
+    let shotsBusy = false;
     let userOrbit = false;
     controls.addEventListener("start", () => { userOrbit = true; });
 
@@ -1146,6 +1184,9 @@
       updateStats(result);
       renderScene(result);
       persist();
+      const boxOk = [state.box.l, state.box.w, state.box.h].every((n) => Number.isFinite(n) && n > 0);
+      els.sheetBtn.disabled = state.shape !== "box" || !boxOk;
+      els.codexBtn.disabled = shotsBusy || !boxOk;
       window.__cartonizer = { packCarton, state, lastResult, tests: testFail, loadProductTexture, loadProductFaces, applyGrok, applySavedState, setFrontCamera, capturePng };
 
     function setFrontCamera() {
@@ -1417,6 +1458,79 @@
       a.click();
     });
 
+    els.sheetBtn.addEventListener("click", () => {
+      readInputs();
+      const box = state.box;
+      if (![box.l, box.w, box.h].every((n) => Number.isFinite(n) && n > 0) || state.shape !== "box") {
+        els.note.textContent = "Sheet export is for retail boxes. Enter L × W × H and switch shape to Box.";
+        els.note.classList.add("warn");
+        return;
+      }
+      const q = new URLSearchParams({
+        l: String(box.l),
+        w: String(box.w),
+        h: String(box.h),
+        name: state.name || "retail-box",
+      });
+      window.location.href = "/api/sheet.svg?" + q.toString();
+    });
+
+    els.codexBtn.addEventListener("click", async () => {
+      readInputs();
+      const box = state.box;
+      if (![box.l, box.w, box.h].every((n) => Number.isFinite(n) && n > 0)) {
+        els.note.textContent = "Enter positive retail box L × W × H before Codex shots.";
+        els.note.classList.add("warn");
+        return;
+      }
+      if (shotsBusy) return;
+      shotsBusy = true;
+      els.codexBtn.disabled = true;
+      const run = "s" + Date.now();
+      try {
+        const metaRes = await fetch("/api/codex/shots");
+        const meta = await metaRes.json();
+        const shots = meta.shots || [];
+        addBubble("bot think", "Codex shots " + shots.length + " — " + (state.name || "retail pack"));
+        for (let i = 0; i < shots.length; i++) {
+          els.codexBtn.textContent = (i + 1) + " / " + shots.length;
+          const shot = shots[i];
+          const res = await fetch("/api/codex/shot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: shot.id, run, state: snapshotState() }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            addBubble("bot think", (shot.title || shot.id) + ": " + (data.error || "failed"));
+            continue;
+          }
+          const card = document.createElement("div");
+          card.className = "bubble bot shot-card";
+          const img = document.createElement("img");
+          img.src = data.url;
+          img.alt = data.title || shot.id;
+          const info = document.createElement("div");
+          const title = document.createElement("strong");
+          title.textContent = data.title || shot.id;
+          const copy = document.createElement("button");
+          copy.type = "button";
+          copy.textContent = "Copy prompt";
+          copy.addEventListener("click", () => navigator.clipboard.writeText(data.prompt || ""));
+          info.append(title, copy);
+          card.append(img, info);
+          els.grokLog.appendChild(card);
+          els.grokLog.scrollTop = els.grokLog.scrollHeight;
+        }
+        els.grokStatus.textContent = "Codex shots done";
+      } catch (err) {
+        addBubble("bot think", "Codex shots need the local server (python3 serve.py). " + err.message);
+      }
+      els.codexBtn.textContent = "Codex shots";
+      shotsBusy = false;
+      refresh();
+    });
+
     let pendingImages = [];
     let grokBusy = false;
 
@@ -1488,7 +1602,10 @@
     fetch("/api/health")
       .then((r) => r.json())
       .then((j) => {
-        els.grokStatus.textContent = j.ok ? "Grok Build login" : (j.error || "offline");
+        if (j.grok && j.codex) els.grokStatus.textContent = "Grok · Codex";
+        else if (j.codex) els.grokStatus.textContent = "Codex login";
+        else if (j.grok || j.ok) els.grokStatus.textContent = "Grok Build login";
+        else els.grokStatus.textContent = j.error || "offline";
       })
       .catch(() => {
         els.grokStatus.textContent = "start serve.py for chat";

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import math
 import os
@@ -17,6 +18,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 ROOT = Path(__file__).resolve().parent
 RUNTIME = ROOT / "runtime"
@@ -26,9 +28,64 @@ SAFE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,80}$")
 AUTH_PATH = Path.home() / ".grok" / "auth.json"
 TOKEN_URL = "https://auth.x.ai/oauth2/token"
 API = "https://api.x.ai/v1"
+CODEX_AUTH_PATH = Path.home() / ".codex" / "auth.json"
+CODEX_CONFIG_PATH = Path.home() / ".codex" / "config.toml"
+CODEX_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses"
+CODEX_SHOTS_DIR = RUNTIME / "codex-shots"
 HOST = "127.0.0.1"
 PORT = 8765
 _auth_lock = threading.Lock()
+AR_TO_SIZE = {"1:1": "1024x1024", "3:2": "1536x1024", "2:3": "1024x1536"}
+VALID_IMAGE_SIZES = {"1024x1024", "1024x1536", "1536x1024", "auto"}
+SHOTS = (
+    {
+        "id": "closed-34",
+        "title": "Closed 3/4",
+        "aspect": "3:2",
+        "picture": (
+            "Photoreal product photo of a sealed retail carton, three-quarter view, "
+            "studio, white seamless backdrop, soft box light."
+        ),
+    },
+    {
+        "id": "closed-front",
+        "title": "Closed front",
+        "aspect": "1:1",
+        "picture": (
+            "Photoreal product photo of a sealed retail carton, camera square-on to the front panel, "
+            "studio, white seamless backdrop."
+        ),
+    },
+    {
+        "id": "open-front-tray",
+        "title": "Open-front tray",
+        "aspect": "3:2",
+        "picture": (
+            "Photoreal supermarket / European drugstore photo of a kraft open-front shelf-ready "
+            "display tray (PDQ). The front wall is cut down so the inner retail cartons are visible, "
+            "stacked with printed faces toward the camera."
+        ),
+    },
+    {
+        "id": "open-carton",
+        "title": "Open carton",
+        "aspect": "3:2",
+        "picture": (
+            "Photoreal packing-table photo of an open kraft shipping carton viewed from above and slightly "
+            "in front. The retail packs sit in a regular grid inside. No lid, leftover space is empty."
+        ),
+    },
+    {
+        "id": "shelf",
+        "title": "Shelf",
+        "aspect": "3:2",
+        "picture": (
+            "Photoreal European drugstore shelf: two kraft open-front trays side by side on a metal shelf "
+            "with a price rail. Each tray holds stacked identical retail cartons, faces toward camera, "
+            "overhead retail lighting."
+        ),
+    },
+)
 
 SYSTEM = """You are Grok inside Cartonizer, a packing-table tool for household products (cling wrap, zip bags, trash-bag rolls, and similar retail packs).
 
@@ -264,6 +321,320 @@ def pack_carton(box: dict, carton: dict) -> dict | None:
                 "tight_inner_mm": [round(nx * Bx, 3), round(ny * By, 3), round(nz * Bz, 3)],
             }
     return best
+
+
+def shot_by_id(shot_id: str) -> dict | None:
+    for s in SHOTS:
+        if s["id"] == shot_id:
+            return s
+    return None
+
+
+def shot_prompt(shot_id: str, state: dict) -> str:
+    spec = shot_by_id(shot_id)
+    if not spec:
+        raise ValueError(f"unknown shot {shot_id}")
+    name = str(state.get("name") or "retail pack").strip() or "retail pack"
+    box = mm_triple(state.get("box"))
+    carton = mm_triple(state.get("carton"))
+    pack = pack_carton(box, carton) if box and carton else None
+    size = "size unknown"
+    if box:
+        size = f"{box['l']:g} × {box['w']:g} × {box['h']:g} mm outer"
+    count = ""
+    if pack and pack["pcs_per_carton"]:
+        nx, ny, nz = pack["grid_LWH"]
+        count = (
+            f" Pack {pack['pcs_per_carton']} units in a {nx} × {ny} × {nz} grid "
+            f"(along carton L, W, H)."
+        )
+        if carton:
+            count += f" Shipping carton inner {carton['l']:g} × {carton['w']:g} × {carton['h']:g} mm."
+    shape = "cylindrical roll wrap" if state.get("shape") == "roll" else "folded printed carton"
+    return (
+        f"{spec['picture']} The product is {name}, a {shape}, {size}.{count} "
+        "Keep the real printed artwork and brand. No invented logos, certifications, "
+        "or extra brands. No hands. Photoreal, sharp, commercial catalog quality."
+    )
+
+
+def sheet_geometry(l: float, w: float, h: float) -> dict:
+    l, w, h = float(l), float(w), float(h)
+    if min(l, w, h) <= 0:
+        raise ValueError("L, W, H must be positive millimetres")
+    glue = 12.0 if w < 30 else 15.0
+    tuck = min(40.0, max(12.0, 0.6 * w))
+    dust = min(25.0, max(8.0, 0.5 * w))
+    return {"l": l, "w": w, "h": h, "glue": glue, "tuck": tuck, "dust": dust}
+
+
+def _svg_rect(x, y, w, h, cls, extra=""):
+    return (
+        f'<rect class="{cls}" x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" {extra}/>'
+    )
+
+
+def _svg_line(x1, y1, x2, y2, cls):
+    return (
+        f'<line class="{cls}" x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}"/>'
+    )
+
+
+def _svg_text(x, y, text, size=3.2):
+    return f'<text x="{x:.2f}" y="{y:.2f}" font-size="{size}">{xml_escape(text)}</text>'
+
+
+def sheet_svg(l: float, w: float, h: float, name: str = "") -> str:
+    g = sheet_geometry(l, w, h)
+    L, W, H, glue, tuck, dust = g["l"], g["w"], g["h"], g["glue"], g["tuck"], g["dust"]
+    m = 18.0
+    title_h = 14.0
+    gx = m
+    body_y = m + title_h + tuck + W
+    left_x = gx + glue
+    front_x = left_x + W
+    right_x = front_x + L
+    back_x = right_x + W
+    top_y = body_y - W
+    tuck_y = top_y - tuck
+    bot_y = body_y + H
+    bot_tuck_y = bot_y + W
+    width = back_x + L + m
+    height = bot_tuck_y + tuck + m + 10
+    parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.2f} {height:.2f}" '
+        f'width="{width:.2f}mm" height="{height:.2f}mm">',
+        "<style>",
+        "rect.panel { fill: #f4eee4; stroke: none; }",
+        "rect.glue { fill: #e8d7b8; stroke: none; }",
+        "line.cut { stroke: #111; stroke-width: 0.35; fill: none; }",
+        "line.crease { stroke: #333; stroke-width: 0.25; stroke-dasharray: 2.2 1.1; fill: none; }",
+        "text { font-family: 'IBM Plex Mono', ui-monospace, monospace; fill: #222; }",
+        "path.cut { stroke: #111; stroke-width: 0.35; fill: none; }",
+        "</style>",
+        _svg_text(m, m + 6, (name or "Retail box").strip() or "Retail box", 4.2),
+        _svg_text(m, m + 11, f"{L:g} × {W:g} × {H:g} mm   reverse-tuck 0210   1 unit = 1 mm", 3),
+        _svg_rect(gx, body_y, glue, H, "glue"),
+        _svg_rect(left_x, body_y, W, H, "panel"),
+        _svg_rect(front_x, body_y, L, H, "panel"),
+        _svg_rect(right_x, body_y, W, H, "panel"),
+        _svg_rect(back_x, body_y, L, H, "panel"),
+        _svg_rect(front_x, top_y, L, W, "panel"),
+        _svg_rect(front_x, tuck_y, L, tuck, "panel"),
+        _svg_rect(back_x, bot_y, L, W, "panel"),
+        _svg_rect(back_x, bot_tuck_y, L, tuck, "panel"),
+        _svg_rect(left_x, body_y - dust, W, dust, "panel"),
+        _svg_rect(right_x, body_y - dust, W, dust, "panel"),
+        _svg_rect(left_x, bot_y, W, dust, "panel"),
+        _svg_rect(right_x, bot_y, W, dust, "panel"),
+        # creases (fold)
+        _svg_line(gx + glue, body_y, gx + glue, body_y + H, "crease"),
+        _svg_line(left_x + W, body_y, left_x + W, body_y + H, "crease"),
+        _svg_line(front_x + L, body_y, front_x + L, body_y + H, "crease"),
+        _svg_line(right_x + W, body_y, right_x + W, body_y + H, "crease"),
+        _svg_line(front_x, body_y, front_x + L, body_y, "crease"),
+        _svg_line(front_x, top_y, front_x + L, top_y, "crease"),
+        _svg_line(back_x, body_y + H, back_x + L, body_y + H, "crease"),
+        _svg_line(back_x, bot_y + W, back_x + L, bot_y + W, "crease"),
+        _svg_line(left_x, body_y, left_x + W, body_y, "crease"),
+        _svg_line(right_x, body_y, right_x + W, body_y, "crease"),
+        _svg_line(left_x, body_y + H, left_x + W, body_y + H, "crease"),
+        _svg_line(right_x, body_y + H, right_x + W, body_y + H, "crease"),
+        # outer cut: glue + body + top/tuck + bottom/tuck + dust
+        (
+            f'<path class="cut" d="M {front_x:.2f} {tuck_y:.2f} '
+            f"H {front_x + L:.2f} V {top_y:.2f} "
+            f"H {right_x + W:.2f} V {body_y - dust:.2f} "
+            f"H {right_x:.2f} V {body_y:.2f} "
+            f"H {back_x + L:.2f} V {bot_tuck_y + tuck:.2f} "
+            f"H {back_x:.2f} V {bot_y + W:.2f} "
+            f"H {right_x:.2f} V {bot_y + dust:.2f} "
+            f"H {right_x + W:.2f} V {bot_y:.2f} "
+            f"H {left_x:.2f} V {bot_y + dust:.2f} "
+            f"H {left_x + W:.2f} V {bot_y:.2f} "
+            f"H {gx:.2f} V {body_y:.2f} "
+            f"H {left_x:.2f} V {body_y - dust:.2f} "
+            f"H {left_x + W:.2f} V {body_y:.2f} "
+            f"H {front_x:.2f} V {top_y:.2f} "
+            f'H {front_x:.2f} V {tuck_y:.2f} Z"/>'
+        ),
+        _svg_text(front_x + 2, body_y + 8, f"FRONT  L {L:g} × H {H:g}"),
+        _svg_text(back_x + 2, body_y + 8, f"BACK  L {L:g} × H {H:g}"),
+        _svg_text(left_x + 1.5, body_y + H / 2, f"W {W:g}"),
+        _svg_text(right_x + 1.5, body_y + H / 2, f"W {W:g}"),
+        _svg_text(gx + 0.8, body_y + H / 2, "GLUE"),
+        _svg_text(front_x + 2, top_y + 8, f"TOP  L {L:g} × W {W:g}"),
+        _svg_text(back_x + 2, bot_y + 8, f"BOTTOM  L {L:g} × W {W:g}"),
+        _svg_text(m, height - 6, "Cut = solid   Crease = dashed   Glue tab hatched", 2.8),
+        "</svg>",
+        "",
+    ]
+    return "\n".join(parts)
+
+
+def read_codex_auth() -> dict | None:
+    if not CODEX_AUTH_PATH.is_file():
+        return None
+    try:
+        data = json.loads(CODEX_AUTH_PATH.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    tokens = data.get("tokens") if isinstance(data.get("tokens"), dict) else {}
+    token = tokens.get("access_token") or data.get("access_token") or data.get("OPENAI_API_KEY")
+    account = tokens.get("account_id") or data.get("account_id")
+    if not token:
+        return None
+    return {"token": token, "accountId": account}
+
+
+def read_codex_model() -> str:
+    try:
+        txt = CODEX_CONFIG_PATH.read_text()
+    except OSError:
+        return "gpt-5.5"
+    m = re.search(r'^\s*model\s*=\s*"([^"]+)"', txt, re.M)
+    return m.group(1) if m else "gpt-5.5"
+
+
+def extract_image_b64(raw: str) -> str | None:
+    full = None
+    last_partial = None
+
+    def consider(evt: dict) -> None:
+        nonlocal full, last_partial
+        if not isinstance(evt, dict):
+            return
+        partial = evt.get("partial_image_b64")
+        if isinstance(partial, str) and len(partial) > 100:
+            last_partial = partial
+        item = evt.get("item") if isinstance(evt.get("item"), dict) else None
+        if item and item.get("type") == "image_generation_call" and isinstance(item.get("result"), str):
+            full = item["result"]
+        if isinstance(evt.get("result"), str) and len(evt["result"]) > 100:
+            full = evt["result"]
+        output = None
+        resp = evt.get("response") if isinstance(evt.get("response"), dict) else None
+        if resp and isinstance(resp.get("output"), list):
+            output = resp["output"]
+        elif isinstance(evt.get("output"), list):
+            output = evt["output"]
+        if not output:
+            return
+        for o in output:
+            if not isinstance(o, dict):
+                continue
+            if o.get("type") == "image_generation_call" and isinstance(o.get("result"), str):
+                full = o["result"]
+            for c in o.get("content") or []:
+                if not isinstance(c, dict):
+                    continue
+                url = c.get("image_url")
+                if isinstance(url, str) and url.startswith("data:"):
+                    full = url.split(",", 1)[-1]
+                if isinstance(c.get("b64_json"), str):
+                    full = c["b64_json"]
+
+    saw_sse = False
+    for line in (raw or "").split("\n"):
+        trimmed = line.strip()
+        if not trimmed.startswith("data:"):
+            continue
+        saw_sse = True
+        json_str = trimmed[5:].strip()
+        if not json_str or json_str == "[DONE]":
+            continue
+        try:
+            consider(json.loads(json_str))
+        except json.JSONDecodeError:
+            continue
+    if not saw_sse:
+        try:
+            consider(json.loads(raw))
+        except json.JSONDecodeError:
+            pass
+    return full or last_partial
+
+
+def generate_codex_image(prompt: str, aspect: str = "1:1") -> bytes:
+    prompt = (prompt or "").strip()
+    if not prompt:
+        raise RuntimeError("Prompt required.")
+    auth = read_codex_auth()
+    if not auth:
+        raise RuntimeError("Codex session not found. Run `codex login` first.")
+    size = AR_TO_SIZE.get(aspect, "auto")
+    if size not in VALID_IMAGE_SIZES:
+        size = "auto"
+    payload = {
+        "model": read_codex_model(),
+        "instructions": (
+            "You are an image generation assistant. Use the image_generation tool to create "
+            "exactly the image the user describes. Do not ask clarifying questions; generate the image directly."
+        ),
+        "input": [{"type": "message", "role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+        "tools": [{"type": "image_generation", "size": size}],
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+        "store": False,
+        "stream": True,
+    }
+    headers = {
+        "Authorization": "Bearer " + auth["token"],
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "OpenAI-Beta": "responses=experimental",
+        "originator": "codex_cli_rs",
+        "User-Agent": "codex_cli_rs",
+    }
+    if auth.get("accountId"):
+        headers["chatgpt-account-id"] = str(auth["accountId"])
+    req = urllib.request.Request(
+        CODEX_RESPONSES_URL,
+        data=json.dumps(payload).encode(),
+        method="POST",
+        headers=headers,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=180) as r:
+            raw = r.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")[:400]
+        if e.code in (401, 403):
+            raise RuntimeError("Codex login expired. Run `codex login`.") from e
+        raise RuntimeError(f"Codex backend {e.code}: {body}") from e
+    b64 = extract_image_b64(raw)
+    if not b64:
+        raise RuntimeError("Codex returned no image (image_generation may be unavailable for this account).")
+    try:
+        return base64.b64decode(b64)
+    except Exception as e:
+        raise RuntimeError("Codex image was not valid base64.") from e
+
+
+def save_codex_shot(shot_id: str, state: dict, run: str) -> dict:
+    spec = shot_by_id(shot_id)
+    if not spec:
+        raise ValueError(f"unknown shot {shot_id}")
+    if not SAFE_ID.match(run):
+        raise ValueError("bad run id")
+    box = mm_triple(state.get("box"))
+    if not box:
+        raise ValueError("need positive retail box L, W, H")
+    prompt = shot_prompt(shot_id, state)
+    png = generate_codex_image(prompt, spec["aspect"])
+    folder = CODEX_SHOTS_DIR / run
+    folder.mkdir(parents=True, exist_ok=True)
+    dest = folder / f"{shot_id}.png"
+    dest.write_bytes(png)
+    (folder / f"{shot_id}.txt").write_text(prompt + "\n", encoding="utf-8")
+    return {
+        "id": shot_id,
+        "title": spec["title"],
+        "prompt": prompt,
+        "url": "/runtime/codex-shots/" + run + "/" + dest.name,
+        "run": run,
+    }
 
 
 GROUPS = ["10L", "25L", "50L", "Ziploc", "Frischhaltefolie"]
@@ -828,13 +1199,47 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path.split("?", 1)[0] == "/api/health":
+            grok_ok, grok_err = False, ""
             try:
                 bearer()
-                self._json(200, {"ok": True, "login": "grok-build"})
+                grok_ok = True
             except Exception as e:
-                self._json(503, {"ok": False, "error": str(e)})
+                grok_err = str(e)
+            codex_ok = read_codex_auth() is not None
+            payload = {"ok": grok_ok, "grok": grok_ok, "codex": codex_ok}
+            if grok_err:
+                payload["error"] = grok_err
+            self._json(200 if grok_ok or codex_ok else 503, payload)
             return
         path = posixpath.normpath(urllib.parse.urlparse(self.path).path)
+        if path == "/api/codex/shots":
+            self._json(200, {"shots": [{"id": s["id"], "title": s["title"], "aspect": s["aspect"]} for s in SHOTS]})
+            return
+        if path == "/api/sheet.svg":
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            try:
+                l = float((qs.get("l") or [""])[0])
+                w = float((qs.get("w") or [""])[0])
+                h = float((qs.get("h") or [""])[0])
+            except (TypeError, ValueError):
+                self._json(400, {"error": "need l, w, h millimetres"})
+                return
+            name = str((qs.get("name") or [""])[0])[:80]
+            try:
+                svg = sheet_svg(l, w, h, name)
+            except ValueError as e:
+                self._json(400, {"error": str(e)})
+                return
+            raw = svg.encode("utf-8")
+            fname = f"cartonizer-{_slug(name) or 'box'}-sheet.svg"
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+            self.send_header("Content-Disposition", f'attachment; filename="{fname}"')
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(raw)
+            return
         if path == "/api/mockups":
             self._json(200, {"mockups": list_mockups()})
             return
@@ -871,6 +1276,26 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urllib.parse.urlparse(self.path).path
+        if path == "/api/codex/shot":
+            try:
+                body = self._read_json()
+            except Exception as e:
+                self._json(400, {"error": str(e)})
+                return
+            shot_id = str(body.get("id") or "")
+            run = str(body.get("run") or f"s{int(time.time())}")
+            state = body.get("state") if isinstance(body.get("state"), dict) else {}
+            try:
+                saved = save_codex_shot(shot_id, state, run)
+            except ValueError as e:
+                self._json(400, {"error": str(e)})
+                return
+            except RuntimeError as e:
+                code = 401 if "login" in str(e).lower() else 502
+                self._json(code, {"error": str(e)})
+                return
+            self._json(200, saved)
+            return
         if path == "/api/mockups":
             try:
                 saved = save_mockup(self._read_json())
@@ -1193,6 +1618,7 @@ def main() -> None:
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"Cartonizer  http://{HOST}:{PORT}/")
     print("Auth: Grok Build login (~/.grok/auth.json)")
+    print("Codex shots: ChatGPT login (~/.codex/auth.json)")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

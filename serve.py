@@ -397,6 +397,7 @@ def resolve_ref_data(url: str) -> str | None:
     url = (url or "").strip()
     if url.startswith("data:image"):
         return url
+    url = url.split("?", 1)[0]
     if url.startswith("/mockups/") or url.startswith("/runtime/"):
         path = (ROOT / url.lstrip("/")).resolve()
         try:

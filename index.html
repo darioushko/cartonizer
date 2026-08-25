@@ -1357,13 +1357,57 @@
       });
     }
 
+    function filmCss() {
+      const c = String(state.film_color || "").toLowerCase();
+      if (c.includes("purple") || c.includes("lila")) return "#d39fc8";
+      if (c.includes("orange")) return "#f0a06a";
+      if (c.includes("pink") || c.includes("rosa")) return "#e59bb0";
+      return "#e59bb0";
+    }
+    function filmHex() {
+      return parseInt(filmCss().slice(1), 16);
+    }
+
     function loadProductTexture(url) {
       if (!url) {
         productMap = null;
         return;
       }
       state.textureUrl = url;
-      loadTex(url, (t) => { productMap = t; });
+      if (state.shape !== "roll") {
+        loadTex(url, (t) => { productMap = t; });
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        const axisMm = Number(state.box && state.box.l) || 100;
+        const sheet = Array.isArray(state.wrap_sheet_mm) ? state.wrap_sheet_mm : [];
+        const bandMm = Number(sheet[0]) > 0 ? Number(sheet[0]) : axisMm * 0.65;
+        const axisPx = 1024;
+        const aroundPx = 2048;
+        const bandPx = Math.max(16, Math.round(axisPx * Math.min(1, bandMm / axisMm)));
+        const canvas = document.createElement("canvas");
+        canvas.width = aroundPx;
+        canvas.height = axisPx;
+        const g = canvas.getContext("2d");
+        g.fillStyle = filmCss();
+        g.fillRect(0, 0, aroundPx, axisPx);
+        const y0 = (axisPx - bandPx) / 2;
+        g.save();
+        g.translate(0, y0 + bandPx);
+        g.rotate(-Math.PI / 2);
+        g.drawImage(img, 0, 0, bandPx, aroundPx);
+        g.restore();
+        const t = new THREE.CanvasTexture(canvas);
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.wrapS = THREE.RepeatWrapping;
+        t.wrapT = THREE.ClampToEdgeWrapping;
+        t.needsUpdate = true;
+        productMap = t;
+        refresh();
+      };
+      img.onerror = () => loadTex(url, (t) => { productMap = t; });
+      img.src = url;
     }
 
     function loadProductFaces(faces) {
@@ -1589,9 +1633,20 @@
 
       const radius = Math.min(sy, sz) / 2;
       const geo = isRoll
-        ? new THREE.CylinderGeometry(radius, radius, sx, 20)
+        ? new THREE.CylinderGeometry(radius, radius, sx, 28)
         : new THREE.BoxGeometry(sx, sy, sz);
-      const mesh = new THREE.InstancedMesh(geo, mat, draw);
+      let rollMat = mat;
+      if (isRoll) {
+        const cap = new THREE.MeshStandardMaterial({ color: filmHex(), roughness: 0.55, metalness: 0.02 });
+        const side = new THREE.MeshStandardMaterial({
+          map: productMap || null,
+          color: productMap ? 0xffffff : 0xf3d7a4,
+          roughness: 0.42,
+          metalness: 0.04,
+        });
+        rollMat = productMap ? [side, cap, cap] : side;
+      }
+      const mesh = new THREE.InstancedMesh(geo, rollMat, draw);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       const dummy = new THREE.Object3D();

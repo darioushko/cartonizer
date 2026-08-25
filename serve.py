@@ -32,6 +32,7 @@ CODEX_AUTH_PATH = Path.home() / ".codex" / "auth.json"
 CODEX_CONFIG_PATH = Path.home() / ".codex" / "config.toml"
 CODEX_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses"
 CODEX_SHOTS_DIR = RUNTIME / "codex-shots"
+VIEWS_DIR = RUNTIME / "views"
 HOST = "127.0.0.1"
 PORT = 8765
 _auth_lock = threading.Lock()
@@ -789,6 +790,64 @@ def list_codex_runs() -> list[dict]:
     return runs[:40]
 
 
+def save_view(kind: str, title: str, data_url: str, name: str = "") -> dict:
+    kind = kind if kind in ("3d", "2d", "codex", "verification") else "3d"
+    url = (data_url or "").strip()
+    if not url.startswith("data:image"):
+        raise ValueError("need dataUrl")
+    header, b64 = url.split(",", 1)
+    raw = base64.b64decode(b64)
+    if not raw:
+        raise ValueError("empty image")
+    vid = "v" + str(int(time.time() * 1000))
+    VIEWS_DIR.mkdir(parents=True, exist_ok=True)
+    ext = ".jpg" if "jpeg" in header.lower() else ".png"
+    (VIEWS_DIR / (vid + ext)).write_bytes(raw)
+    rec = {
+        "id": vid,
+        "kind": kind,
+        "title": (title or ("3D view" if kind == "3d" else kind))[:80],
+        "name": (name or "")[:80],
+        "url": "/runtime/views/" + vid + ext,
+        "createdAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    (VIEWS_DIR / (vid + ".json")).write_text(json.dumps(rec, indent=2) + "\n")
+    rec["mtime"] = time.time()
+    return rec
+
+
+def list_views() -> list[dict]:
+    items: list[dict] = []
+    if VIEWS_DIR.is_dir():
+        for meta in VIEWS_DIR.glob("*.json"):
+            try:
+                rec = json.loads(meta.read_text())
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(rec, dict) or not rec.get("url"):
+                continue
+            rec["mtime"] = meta.stat().st_mtime
+            rec.setdefault("kind", "3d")
+            rec.setdefault("title", rec.get("id") or "view")
+            items.append(rec)
+    for run in list_codex_runs():
+        folder = CODEX_SHOTS_DIR / run["run"]
+        for shot in run["shots"]:
+            png = folder / f"{shot['id']}.png"
+            items.append(
+                {
+                    "id": run["run"] + "-" + shot["id"],
+                    "kind": "codex",
+                    "title": shot["title"],
+                    "name": run.get("name") or "",
+                    "url": shot["url"],
+                    "mtime": png.stat().st_mtime if png.is_file() else 0,
+                }
+            )
+    items.sort(key=lambda x: float(x.get("mtime") or 0), reverse=True)
+    return items[:200]
+
+
 GROUPS = ["10L", "25L", "50L", "Ziploc", "Frischhaltefolie"]
 GROUP_COUNTS = {
     "10L": [20, 25, 30, 37],
@@ -1370,6 +1429,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/codex/runs":
             self._json(200, {"runs": list_codex_runs()})
             return
+        if path == "/api/views":
+            self._json(200, {"views": list_views()})
+            return
         if path == "/api/sheet.svg":
             qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             try:
@@ -1431,6 +1493,24 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urllib.parse.urlparse(self.path).path
+        if path == "/api/views":
+            try:
+                body = self._read_json()
+            except Exception as e:
+                self._json(400, {"error": str(e)})
+                return
+            try:
+                saved = save_view(
+                    str(body.get("kind") or "3d"),
+                    str(body.get("title") or ""),
+                    str(body.get("dataUrl") or ""),
+                    str(body.get("name") or ""),
+                )
+            except ValueError as e:
+                self._json(400, {"error": str(e)})
+                return
+            self._json(200, saved)
+            return
         if path == "/api/codex/shot":
             try:
                 body = self._read_json()

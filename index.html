@@ -6,7 +6,7 @@
   <title>Cartonizer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script type="importmap">
   {
     "imports": {
@@ -17,115 +17,200 @@
   </script>
   <style>
     :root {
-      --ink: #171411;
-      --table: #241e18;
-      --panel: #1e1a16;
+      --bg: #eef0f3;
+      --card: #ffffff;
+      --ink: #111827;
+      --mute: #6b7280;
+      --label: #9ca3af;
+      --line: #e5e7eb;
+      --soft: #f3f4f6;
+      --green: #16a34a;
+      --green-soft: #dcfce7;
+      --green-text: #15803d;
+      --focus: #22c55e;
+      --warn: #b45309;
+      --shadow: 0 1px 2px rgba(17, 24, 39, 0.06), 0 8px 24px rgba(17, 24, 39, 0.04);
+      --radius: 16px;
       --kraft: #c4a06a;
-      --kraft-dark: #8a6a3d;
-      --box: #e6c27a;
-      --paper: #f3ece0;
-      --mute: #9a8f80;
-      --line: #3a3228;
-      --stamp: #c45c3a;
-      --ok: #c4a06a;
-      --focus: #e6c27a;
+      --box: #16a34a;
+      --paper: #111827;
+      --ok: #16a34a;
+      --stamp: #dc2626;
+      --panel: #ffffff;
+    }
+    html[data-theme="dark"] {
+      --bg: #0f1115;
+      --card: #171a20;
+      --ink: #f3f4f6;
+      --mute: #9ca3af;
+      --label: #9ca3af;
+      --line: #2a303a;
+      --soft: #1e232c;
+      --green-soft: #16351f;
+      --green-text: #86efac;
+      --paper: #f3f4f6;
+      --panel: #171a20;
+      --shadow: none;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
     body {
       display: grid;
-      grid-template-columns: 288px minmax(0, 1fr) 268px;
-      grid-template-rows: minmax(0, 1fr) 270px;
+      grid-template-columns: 300px minmax(0, 1fr) 300px;
+      grid-template-rows: 64px minmax(0, 1fr);
       grid-template-areas:
-        "left stage right"
-        "left grok right";
-      background: var(--ink);
-      color: var(--paper);
-      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        "header header header"
+        "left center right";
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, "Segoe UI", sans-serif;
       font-size: 14px;
     }
+    #appHeader { grid-area: header; }
     .panel-left { grid-area: left; }
-    #stage { grid-area: stage; }
+    .center { grid-area: center; }
     .panel-right { grid-area: right; }
-    #grok { grid-area: grok; }
-    button, input { font: inherit; color: inherit; }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    #appHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+      z-index: 5;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      color: var(--ink);
+    }
+    .brand-name {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      line-height: 1.1;
+    }
+    .brand-sub {
+      font-size: 12px;
+      color: var(--mute);
+      margin-top: 1px;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+    }
+    .icon-btn:hover { background: var(--soft); }
+    .icon-btn svg { width: 16px; height: 16px; }
+    #shareBtn {
+      height: 36px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      font-size: 13px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #saveBtn {
+      height: 36px;
+      padding: 0 16px;
+      border-radius: 999px;
+      border: 0;
+      background: var(--ink);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #saveBtn:hover { background: #000; }
     .panel {
-      background: var(--panel);
-      border-right: 1px solid var(--line);
-      padding: 22px 20px 28px;
+      background: var(--card);
+      padding: 16px 20px 20px;
       overflow: auto;
     }
-    .panel-right {
-      border-right: 0;
-      border-left: 1px solid var(--line);
-      background:
-        radial-gradient(circle at 0 12px, transparent 5px, var(--panel) 6px) 0 0 / 12px 18px repeat-y,
-        var(--panel);
-      padding-left: 28px;
-    }
-    .eyebrow {
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 10px;
-      letter-spacing: 0.16em;
+    .panel-left { border-right: 1px solid var(--line); }
+    .panel-right { border-left: 1px solid var(--line); }
+    .eyebrow, .section-label, label.field > span {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--kraft);
-      margin: 0 0 6px;
+      color: var(--label);
+      margin: 0 0 8px;
     }
-    h1 {
-      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
-      font-size: 34px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      margin: 0 0 4px;
-      line-height: 0.95;
+    .section-label {
+      margin: 12px 0 6px;
     }
+    h1 { display: none; }
     .lede {
       color: var(--mute);
-      margin: 0 0 22px;
+      margin: 0 0 14px;
       line-height: 1.4;
+      font-size: 13px;
     }
-    label.field {
-      display: block;
-      margin-bottom: 10px;
-    }
-    label.field span {
-      display: block;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 10px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--mute);
-      margin-bottom: 5px;
-    }
-    input[type="text"], input[type="number"], select {
+    label.field { display: block; margin-bottom: 8px; }
+    input[type="text"], input[type="number"], select, textarea {
       width: 100%;
-      background: #14110e;
+      background: var(--card);
       border: 1px solid var(--line);
-      border-radius: 2px;
-      padding: 8px 10px;
+      border-radius: 10px;
+      padding: 8px 11px;
       outline: none;
     }
-    select { color: inherit; }
-    input[type="number"] { font-family: "IBM Plex Mono", ui-monospace, monospace; }
-    input:focus { border-color: var(--focus); }
+    input[type="number"] { font-variant-numeric: tabular-nums; }
+    input:focus, select:focus, textarea:focus { border-color: var(--focus); box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15); }
+    .input-affix {
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--card);
+    }
+    .input-affix input {
+      border: 0;
+      box-shadow: none;
+      border-radius: 10px;
+    }
+    .input-affix input:focus { box-shadow: none; }
+    .input-affix:focus-within { border-color: var(--focus); box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15); }
+    .affix {
+      color: var(--mute);
+      padding: 0 12px 0 0;
+      font-size: 13px;
+    }
     .dims {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 8px;
-      margin-bottom: 16px;
+      margin-bottom: 4px;
     }
-    .section-label {
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 10px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--kraft);
-      margin: 18px 0 8px;
-      padding-top: 14px;
-      border-top: 1px solid var(--line);
-    }
-    #contentsClingWrap[hidden], #contentsPcsWrap[hidden], #filmMicWrap[hidden], #bagMmWrap[hidden], #compareWrap[hidden] { display: none !important; }
+    .dims-2 { grid-template-columns: 1fr 1fr; }
+    [hidden] { display: none !important; }
+    #contentsClingWrap[hidden], #contentsPcsWrap[hidden], #filmMicWrap[hidden], #bagMmWrap[hidden], #compareWrap[hidden], #bagDimsLabel[hidden] { display: none !important; }
     #compareWrap { overflow-x: auto; }
     #variantsTable { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 8px; }
     #variantsTable th, #variantsTable td {
@@ -139,29 +224,29 @@
     #variantsTable tr.base td { color: var(--box); }
     #compareBtn {
       width: 100%;
-      margin-top: 6px;
-      background: transparent;
-      color: var(--paper);
+      margin-top: 8px;
+      background: var(--card);
+      color: var(--ink);
       border: 1px solid var(--line);
-      padding: 8px 10px;
-      cursor: pointer;
-      font-size: 12px;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 500;
     }
-    #compareBtn:hover { border-color: var(--kraft); color: var(--box); }
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    #compareBtn:hover { background: var(--soft); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
     .chip {
-      background: transparent;
+      background: var(--card);
       border: 1px solid var(--line);
-      color: var(--paper);
-      padding: 5px 9px;
+      color: var(--ink);
+      padding: 6px 12px;
       border-radius: 999px;
-      cursor: pointer;
-      font-size: 12px;
+      font-size: 13px;
     }
     .chip[aria-pressed="true"] {
-      border-color: var(--kraft);
-      background: #2c2418;
-      color: var(--box);
+      border-color: var(--green);
+      background: var(--green-soft);
+      color: var(--green-text);
     }
     .chip:focus-visible, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
     .units {
@@ -169,115 +254,187 @@
       gap: 0;
       margin: 8px 0 4px;
       border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
       width: fit-content;
     }
     .units button {
       background: transparent;
       border: 0;
       padding: 6px 12px;
-      cursor: pointer;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 11px;
-      letter-spacing: 0.08em;
+      font-size: 12px;
+      font-weight: 500;
     }
-    .units button[aria-pressed="true"] { background: #2c2418; color: var(--box); }
+    .units button[aria-pressed="true"] { background: var(--soft); color: var(--ink); }
+    .center {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px 16px 16px;
+      min-width: 0;
+      min-height: 0;
+    }
     #stage {
       position: relative;
-      background: radial-gradient(ellipse at 50% 70%, #2a241c 0%, #171411 62%);
+      flex: 1;
       min-height: 280px;
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
     }
-    #stage canvas { display: block; width: 100%; height: 100%; }
+    #stage canvas { display: block; width: 100%; height: 100%; position: relative; z-index: 1; }
+    #sheetPreview {
+      position: absolute;
+      inset: 0;
+      background: var(--card);
+      z-index: 2;
+    }
+    #sheetPreview[hidden] { display: none !important; }
+    #sheetPreview object, #sheetPreview iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+    .stage-tools {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 3;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .view-toggle {
+      display: flex;
+      background: var(--soft);
+      border-radius: 999px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .view-toggle button {
+      border: 0;
+      background: transparent;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--mute);
+    }
+    .view-toggle button[aria-pressed="true"] {
+      background: var(--card);
+      color: var(--ink);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+    .tool-cluster {
+      display: flex;
+      gap: 6px;
+    }
+    .tool-cluster .icon-btn {
+      width: 32px;
+      height: 32px;
+      background: var(--card);
+    }
     .hint {
       position: absolute;
-      left: 16px;
-      bottom: 12px;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 10px;
-      letter-spacing: 0.08em;
+      left: 0;
+      right: 0;
+      bottom: 14px;
+      text-align: center;
+      font-size: 12px;
       color: var(--mute);
       pointer-events: none;
+      z-index: 3;
+    }
+    .count-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
     }
     .count {
-      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
-      font-size: 92px;
+      font-size: 64px;
       font-weight: 700;
-      line-height: 0.82;
-      letter-spacing: 0.02em;
-      color: var(--box);
-      margin: 4px 0 0;
+      line-height: 0.86;
+      letter-spacing: -0.03em;
+      color: var(--green);
+      margin: 0;
     }
     .count.zero { color: var(--stamp); }
     .count-unit {
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
       font-size: 11px;
-      letter-spacing: 0.16em;
+      font-weight: 600;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--mute);
-      margin: 8px 0 18px;
+      margin: 8px 0 16px;
     }
+    #optimalBadge {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--green-text);
+      background: var(--green-soft);
+      border-radius: 999px;
+      padding: 4px 10px;
+      margin-top: 10px;
+    }
+    #optimalBadge[hidden] { display: none !important; }
     .stat {
-      display: grid;
-      grid-template-columns: 92px 1fr;
-      gap: 6px 10px;
-      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
       font-size: 13px;
     }
     .stat dt {
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 10px;
-      letter-spacing: 0.12em;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--mute);
+      color: var(--label);
       margin: 0;
-      padding-top: 3px;
     }
-    .stat dd { margin: 0; }
+    .stat dd { margin: 0; font-weight: 500; }
+    #grid.pill {
+      background: var(--green-soft);
+      color: var(--green-text);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-weight: 600;
+    }
     #note {
-      min-height: 2.4em;
-      color: var(--mute);
-      line-height: 1.4;
-      margin: 16px 0 18px;
+      color: var(--green-text);
+      background: var(--green-soft);
+      line-height: 1.45;
+      margin: 10px 0 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 13px;
     }
-    #note.warn { color: #e8b0a0; }
-    #pngBtn {
-      width: 100%;
-      background: var(--kraft);
-      color: var(--ink);
-      border: 0;
-      padding: 12px 14px;
-      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      cursor: pointer;
+    #note.warn {
+      color: var(--warn);
+      background: #fff7ed;
     }
-    #pngBtn:hover { background: var(--box); }
-    #saveBtn, #sheetBtn, #codexBtn {
+    .export-label {
+      margin: 12px 0 6px;
+    }
+    .export-btn {
       width: 100%;
       margin-top: 8px;
-      background: transparent;
-      color: var(--paper);
-      border: 1px solid var(--kraft);
-      padding: 10px 14px;
-      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
-      font-size: 16px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      cursor: pointer;
-    }
-    #codexBtn {
-      background: var(--kraft);
+      background: var(--soft);
       color: var(--ink);
-      border: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
-    #codexBtn:hover { background: var(--box); }
-    #codexBtn:disabled, #sheetBtn:disabled {
-      opacity: 0.45;
-      cursor: default;
-    }
-    #saveBtn:hover, #sheetBtn:hover { background: #2c2418; }
+    .export-btn:hover { background: #eceff3; }
+    #codexBtn:disabled, #sheetBtn:disabled { opacity: 0.45; cursor: default; }
     .shot-card {
       display: grid;
       grid-template-columns: 132px 1fr;
@@ -289,16 +446,17 @@
       width: 132px;
       height: 88px;
       object-fit: cover;
-      background: #14110e;
+      background: var(--soft);
       border: 1px solid var(--line);
+      border-radius: 8px;
     }
     .shot-card strong { display: block; margin-bottom: 4px; }
     .shot-card button {
-      background: transparent;
+      background: var(--card);
       border: 1px solid var(--line);
-      color: var(--paper);
+      color: var(--ink);
+      border-radius: 8px;
       padding: 4px 8px;
-      cursor: pointer;
       font-size: 11px;
     }
     #mockupList { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
@@ -310,108 +468,122 @@
       font-size: 12px;
     }
     .mockup-row button {
-      background: transparent;
+      background: var(--card);
       border: 1px solid var(--line);
-      color: var(--paper);
+      color: var(--ink);
+      border-radius: 8px;
       padding: 4px 8px;
-      cursor: pointer;
       font-size: 11px;
     }
-    .mockup-row .open { border-color: var(--kraft); color: var(--box); }
+    .mockup-row .open { border-color: var(--green); color: var(--green-text); }
+    details.advanced {
+      margin-top: 18px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+    details.advanced > summary {
+      cursor: pointer;
+      color: var(--mute);
+      font-size: 13px;
+      list-style: none;
+    }
+    details.advanced > summary::-webkit-details-marker { display: none; }
     #grok {
       display: flex;
       flex-direction: column;
-      border-top: 1px solid var(--line);
-      background: var(--panel);
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
       min-height: 0;
+      flex: 0 0 auto;
     }
     #grokHead {
       display: flex;
       align-items: baseline;
       justify-content: space-between;
       gap: 12px;
-      padding: 10px 14px 8px;
-      background: var(--panel);
-      z-index: 1;
+      padding: 12px 16px 0;
     }
-    #grokStatus { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; letter-spacing: 0.08em; color: var(--mute); }
+    #grokStatus { font-size: 11px; color: var(--mute); }
     #grokLog {
-      flex: 1;
-      min-height: 0;
+      max-height: 160px;
       overflow: auto;
-      padding: 8px 14px;
+      padding: 8px 16px;
       display: flex;
       flex-direction: column;
       gap: 8px;
     }
+    #grokLog:empty { display: none; }
     .bubble {
       max-width: 92%;
       padding: 8px 10px;
-      border-radius: 2px;
+      border-radius: 10px;
       line-height: 1.4;
       white-space: pre-wrap;
     }
-    .bubble.user { align-self: flex-end; background: #2c2418; }
-    .bubble.bot { align-self: flex-start; background: #14110e; border: 1px solid var(--line); }
+    .bubble.user { align-self: flex-end; background: var(--soft); }
+    .bubble.bot { align-self: flex-start; background: var(--soft); border: 1px solid var(--line); }
     .bubble.think { color: var(--mute); font-style: italic; border-style: dashed; }
-    .bubble img { display: block; max-height: 88px; margin-top: 6px; }
+    .bubble img { display: block; max-height: 88px; margin-top: 6px; border-radius: 8px; }
     #grokForm {
       display: grid;
       grid-template-columns: auto 1fr auto;
       gap: 8px;
-      padding: 8px 14px 12px;
-      border-top: 1px solid var(--line);
-      align-items: end;
+      padding: 12px 16px 14px;
+      align-items: center;
     }
     #grokText {
       width: 100%;
-      min-height: 40px;
+      min-height: 42px;
       max-height: 88px;
-      resize: vertical;
-      background: #14110e;
-      border: 1px solid var(--line);
-      border-radius: 2px;
-      padding: 8px 10px;
+      resize: none;
+      background: var(--soft);
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 10px 12px;
       outline: none;
     }
-    #grokText:focus { border-color: var(--focus); }
     #attachBtn, #grokSend {
-      background: transparent;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    #attachBtn {
+      background: var(--card);
       border: 1px solid var(--line);
-      padding: 8px 10px;
-      cursor: pointer;
-      font-size: 12px;
     }
     #grokSend {
-      background: var(--kraft);
-      color: var(--ink);
+      background: var(--green);
+      color: #fff;
       border: 0;
-      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
-      font-size: 16px;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
     }
     #grokSend:disabled { opacity: 0.45; cursor: default; }
     #attachName { display: none; }
-    @media (max-width: 900px) {
+    dialog#helpDialog {
+      border: 0;
+      border-radius: 16px;
+      padding: 20px 22px;
+      max-width: 420px;
+      box-shadow: var(--shadow);
+    }
+    dialog#helpDialog::backdrop { background: rgba(17,24,39,0.35); }
+    @media (max-width: 980px) {
       body {
         grid-template-columns: 1fr;
-        grid-template-rows: auto 42vh auto auto;
+        grid-template-rows: 64px auto 52vh auto auto;
         grid-template-areas:
+          "header"
           "left"
-          "stage"
-          "grok"
+          "center"
           "right";
       }
-      .panel { border-right: 0; border-bottom: 1px solid var(--line); max-height: none; }
-      .panel-right {
-        border-left: 0;
-        background: var(--panel);
-        padding-left: 20px;
-      }
-      .count { font-size: 64px; }
-      #grok { border-top: 0; min-height: 220px; }
+      .panel { border-right: 0; border-left: 0; border-bottom: 1px solid var(--line); max-height: none; }
+      .count { font-size: 56px; }
     }
     @media (prefers-reduced-motion: reduce) {
       * { scroll-behavior: auto !important; }
@@ -419,14 +591,39 @@
   </style>
 </head>
 <body>
-  <aside class="panel panel-left" aria-label="Sizes">
-    <p class="eyebrow">Packing table</p>
-    <h1>Cartonizer</h1>
-    <p class="lede">How many retail boxes fit in one shipping carton.</p>
+  <header id="appHeader">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <path fill="currentColor" d="M16 3.2 4 9.2v13.6l12 6 12-6V9.2L16 3.2zm0 2.4 8.4 4.2L16 14.2 7.6 9.8 16 5.6zM6 11.3l9 4.5v10.4l-9-4.5V11.3zm11 14.9V15.8l9-4.5v10.4l-9 4.5z"/>
+      </svg>
+      <div>
+        <div class="brand-name">Cartonizer</div>
+        <div class="brand-sub">Packing optimization tool</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="icon-btn" id="themeBtn" aria-label="Toggle theme" title="Theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="helpBtn" aria-label="Help" title="Help">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.8.4-1.4 1-1.4 1.9V14"/><circle cx="12" cy="17" r=".8" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button type="button" id="shareBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+        Share
+      </button>
+      <button type="button" id="saveBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+        Save Mockup
+      </button>
+    </div>
+  </header>
 
+  <aside class="panel panel-left" aria-label="Sizes">
+    <h1>Cartonizer</h1>
     <label class="field">
-      <span>SKU name</span>
-      <input id="name" type="text" maxlength="80" placeholder="Optional" autocomplete="off" />
+      <span>Product</span>
+      <select id="productSelect"></select>
     </label>
     <label class="field">
       <span>Group</span>
@@ -439,6 +636,7 @@
         <option value="Frischhaltefolie">Frischhaltefolie</option>
       </select>
     </label>
+    <p class="eyebrow">Bag type</p>
     <div class="chips" role="group" aria-label="Product type">
       <button type="button" class="chip" data-category="cling" data-name="Cling wrap">Cling wrap</button>
       <button type="button" class="chip" data-category="zip_bag" data-name="Zip bags">Zip bags</button>
@@ -448,96 +646,135 @@
 
     <div id="contentsPcsWrap">
       <label class="field">
-        <span id="contentsPcsLabel">Bags per roll</span>
+        <span id="contentsPcsLabel">Bags per roll (not rolls in carton)</span>
         <input id="pcsPerPack" type="number" min="0" step="1" placeholder="e.g. 37" />
       </label>
       <label class="field" id="filmMicWrap" hidden>
-        <span>Film thickness µm (one side)</span>
-        <input id="filmMic" type="number" min="0" step="any" placeholder="e.g. 20" />
+        <span>Film thickness (one side)</span>
+        <div class="input-affix">
+          <input id="filmMic" type="number" min="0" step="any" placeholder="e.g. 20" />
+          <span class="affix">µm</span>
+        </div>
       </label>
-      <div id="bagMmWrap" class="dims" hidden>
-        <label class="field"><span>Bag W mm</span><input id="bagWidthMm" type="number" min="0" step="any" placeholder="530" /></label>
-        <label class="field"><span>Bag L mm</span><input id="bagLengthMm" type="number" min="0" step="any" placeholder="590" /></label>
+      <p class="eyebrow" id="bagDimsLabel" hidden>Bag dimensions</p>
+      <div id="bagMmWrap" class="dims dims-2" hidden>
+        <label class="field"><span>W</span><div class="input-affix"><input id="bagWidthMm" type="number" min="0" step="any" placeholder="530" /><span class="affix">mm</span></div></label>
+        <label class="field"><span>L</span><div class="input-affix"><input id="bagLengthMm" type="number" min="0" step="any" placeholder="590" /><span class="affix">mm</span></div></label>
       </div>
     </div>
-    <div id="contentsClingWrap" class="dims" hidden>
-      <label class="field"><span>Film width cm</span><input id="filmWidthCm" type="number" min="0" step="any" placeholder="29" /></label>
-      <label class="field"><span>Film length m</span><input id="filmLengthM" type="number" min="0" step="any" placeholder="20" /></label>
+    <div id="contentsClingWrap" class="dims dims-2" hidden>
+      <label class="field"><span>Film width</span><div class="input-affix"><input id="filmWidthCm" type="number" min="0" step="any" placeholder="29" /><span class="affix">cm</span></div></label>
+      <label class="field"><span>Film length</span><div class="input-affix"><input id="filmLengthM" type="number" min="0" step="any" placeholder="20" /><span class="affix">m</span></div></label>
     </div>
 
-    <div class="section-label">Retail box</div>
+    <p class="section-label">Retail box (mm)</p>
     <div class="dims">
       <label class="field"><span>L</span><input id="boxL" type="number" min="0" step="any" /></label>
       <label class="field"><span>W</span><input id="boxW" type="number" min="0" step="any" /></label>
       <label class="field"><span>H</span><input id="boxH" type="number" min="0" step="any" /></label>
     </div>
 
-    <div class="section-label">Carton inner</div>
+    <p class="section-label">Carton inner (mm)</p>
     <div class="dims">
       <label class="field"><span>L</span><input id="cartonL" type="number" min="0" step="any" /></label>
       <label class="field"><span>W</span><input id="cartonW" type="number" min="0" step="any" /></label>
       <label class="field"><span>H</span><input id="cartonH" type="number" min="0" step="any" /></label>
     </div>
 
-    <div class="section-label">Shape</div>
-    <div class="units" role="group" aria-label="Shape">
-      <button type="button" id="shapeBox" aria-pressed="true">Box</button>
-      <button type="button" id="shapeRoll" aria-pressed="false">Roll</button>
-    </div>
-
-    <div class="section-label">Unit</div>
-    <div class="units" role="group" aria-label="Unit">
-      <button type="button" id="unitMm" aria-pressed="true">mm</button>
-      <button type="button" id="unitCm" aria-pressed="false">cm</button>
-    </div>
-
-    <div class="section-label">Mockups</div>
-    <div id="mockupList"></div>
+    <details class="advanced">
+      <summary>Advanced options</summary>
+      <p class="section-label">Shape</p>
+      <div class="units" role="group" aria-label="Shape">
+        <button type="button" id="shapeBox" aria-pressed="true">Box</button>
+        <button type="button" id="shapeRoll" aria-pressed="false">Roll</button>
+      </div>
+      <p class="section-label">Unit</p>
+      <div class="units" role="group" aria-label="Unit">
+        <button type="button" id="unitMm" aria-pressed="true">mm</button>
+        <button type="button" id="unitCm" aria-pressed="false">cm</button>
+      </div>
+      <label class="field">
+        <span>SKU name</span>
+        <input id="name" type="text" maxlength="80" placeholder="Optional" autocomplete="off" />
+      </label>
+      <p class="section-label">Saved mockups</p>
+      <div id="mockupList"></div>
+    </details>
   </aside>
 
-  <main id="stage">
-    <div class="hint">drag to orbit · scroll to zoom · right-drag to pan</div>
-  </main>
+  <div class="center">
+    <main id="stage">
+      <div class="stage-tools">
+        <div class="view-toggle" role="group" aria-label="View">
+          <button type="button" id="view3d" aria-pressed="true">3D</button>
+          <button type="button" id="view2d" aria-pressed="false">2D</button>
+        </div>
+        <div class="tool-cluster">
+          <button type="button" class="icon-btn" id="resetCamBtn" title="Reset camera" aria-label="Reset camera">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+          </button>
+          <button type="button" class="icon-btn" id="frontCamBtn" title="Front view" aria-label="Front view">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l9-5 9 5v8l-9 5-9-5V8z"/><path d="M12 3v18"/></svg>
+          </button>
+          <button type="button" class="icon-btn" id="isoCamBtn" title="Iso view" aria-label="Iso view">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8v8H8z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="sheetPreview" hidden></div>
+      <p class="hint">Drag to rotate · Scroll to zoom · Right-click to pan</p>
+    </main>
 
-  <section id="grok" aria-label="Grok chat">
-    <div id="grokHead">
-      <p class="eyebrow" style="margin:0">Grok Build</p>
-      <span id="grokStatus">connecting…</span>
-    </div>
-    <div id="grokLog"></div>
-    <form id="grokForm">
-      <button type="button" id="attachBtn">Photo</button>
-      <textarea id="grokText" rows="2" placeholder="Dieline, Measure photos, or product shot. Fold the pack, estimate the roll, pack the carton."></textarea>
-      <button type="submit" id="grokSend">Send</button>
-      <input id="attachFile" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden />
-    </form>
-  </section>
+    <section id="grok" aria-label="AI packing assistant">
+      <div id="grokHead">
+        <p class="eyebrow" style="margin:0">AI packing assistant</p>
+        <span id="grokStatus">connecting…</span>
+      </div>
+      <div id="grokLog"></div>
+      <form id="grokForm">
+        <button type="button" id="attachBtn">Photo</button>
+        <textarea id="grokText" rows="1" placeholder="Dieline, measure photos, or product shot. Fold the pack, estimate the roll, pack the carton."></textarea>
+        <button type="submit" id="grokSend">Send</button>
+        <input id="attachFile" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden />
+      </form>
+    </section>
+  </div>
 
   <aside class="panel panel-right" aria-label="Fit">
-    <p class="eyebrow">Fit</p>
-    <p id="count" class="count">—</p>
-    <p class="count-unit" id="countUnit">boxes / carton</p>
+    <p class="eyebrow">Fit result</p>
+    <div class="count-row">
+      <p id="count" class="count">—</p>
+      <span id="optimalBadge" hidden>Optimal</span>
+    </div>
+    <p class="count-unit" id="countUnit">rolls / carton</p>
     <dl>
-      <div class="stat"><dt>Grid</dt><dd id="grid">—</dd></div>
+      <div class="stat"><dt>Grid</dt><dd id="grid" class="pill">—</dd></div>
       <div class="stat"><dt>Packed as</dt><dd id="orient">—</dd></div>
       <div class="stat"><dt>Leftover</dt><dd id="leftover">—</dd></div>
-      <div class="stat"><dt>Fill</dt><dd id="fill">—</dd></div>
+      <div class="stat"><dt>Fill rate</dt><dd id="fill">—</dd></div>
     </dl>
     <p id="note"></p>
     <div id="compareWrap" hidden>
-      <div class="section-label" style="margin-top:8px">Bag-count scale</div>
+      <p class="section-label">Bag count scale</p>
       <label class="field">
         <span>Compare bags / roll</span>
-        <input id="compareCounts" type="text" placeholder="12,15,18,25" />
+        <input id="compareCounts" type="text" placeholder="12, 15, 18, 25" />
       </label>
       <button type="button" id="compareBtn">Compare diameters</button>
       <table id="variantsTable"></table>
     </div>
-    <button type="button" id="pngBtn">Download PNG</button>
-    <button type="button" id="codexBtn">Codex shots</button>
-    <button type="button" id="sheetBtn">Export sheet</button>
-    <button type="button" id="saveBtn">Save mockup</button>
+    <p class="eyebrow export-label">Export</p>
+    <button type="button" class="export-btn" id="pngBtn">Download PNG <span aria-hidden="true">↓</span></button>
+    <button type="button" class="export-btn" id="codexBtn">Codex shots <span aria-hidden="true">↗</span></button>
+    <button type="button" class="export-btn" id="sheetBtn">Export sheet <span aria-hidden="true">↓</span></button>
   </aside>
+
+  <dialog id="helpDialog">
+    <p class="eyebrow">Help</p>
+    <p>Enter retail pack millimetres and carton inner size. The 3D view shows the densest axis-aligned pack.</p>
+    <p>Photo + Send reads a dieline or Measure shot. Codex shots builds five photoreal carton images. Export sheet downloads the CAD net.</p>
+    <form method="dialog"><button class="export-btn" value="ok">Close</button></form>
+  </dialog>
 
   <script type="module">
     import * as THREE from "three";
@@ -570,6 +807,7 @@
     const $ = (id) => document.getElementById(id);
     const els = {
       name: $("name"),
+      productSelect: $("productSelect"),
       group: $("group"),
       boxL: $("boxL"),
       boxW: $("boxW"),
@@ -616,6 +854,18 @@
       grokStatus: $("grokStatus"),
       attachBtn: $("attachBtn"),
       attachFile: $("attachFile"),
+      view3d: $("view3d"),
+      view2d: $("view2d"),
+      sheetPreview: $("sheetPreview"),
+      optimalBadge: $("optimalBadge"),
+      resetCamBtn: $("resetCamBtn"),
+      frontCamBtn: $("frontCamBtn"),
+      isoCamBtn: $("isoCamBtn"),
+      helpBtn: $("helpBtn"),
+      shareBtn: $("shareBtn"),
+      themeBtn: $("themeBtn"),
+      helpDialog: $("helpDialog"),
+      bagDimsLabel: $("bagDimsLabel"),
     };
 
     function packCarton(box, carton) {
@@ -767,6 +1017,7 @@
       if (els.contentsPcsWrap) els.contentsPcsWrap.hidden = cling;
       if (els.filmMicWrap) els.filmMicWrap.hidden = !trash;
       if (els.bagMmWrap) els.bagMmWrap.hidden = !trash;
+      if (els.bagDimsLabel) els.bagDimsLabel.hidden = !trash;
       if (els.compareWrap) els.compareWrap.hidden = !trash;
       if (els.contentsPcsLabel) {
         els.contentsPcsLabel.textContent =
@@ -944,14 +1195,14 @@
       return [sideMat, sideMat, top, top, frontMat, backMat];
     }
     const tableMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1612,
+      color: 0xf3f4f6,
       roughness: 1,
       metalness: 0,
     });
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x171411);
-    scene.fog = new THREE.Fog(0x171411, 900, 2800);
+    scene.background = new THREE.Color(0xf7f8fa);
+    scene.fog = null;
 
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 20000);
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -964,12 +1215,12 @@
     controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI * 0.49;
 
-    scene.add(new THREE.HemisphereLight(0xf0e6d4, 0x2a2018, 0.85));
-    const key = new THREE.DirectionalLight(0xfff3dd, 1.05);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xd7dbe2, 0.95));
+    const key = new THREE.DirectionalLight(0xffffff, 0.85);
     key.position.set(400, 700, 320);
     key.castShadow = true;
     scene.add(key);
-    const fill = new THREE.DirectionalLight(0x8899aa, 0.28);
+    const fill = new THREE.DirectionalLight(0xc5d0dc, 0.35);
     fill.position.set(-300, 200, -200);
     scene.add(fill);
 
@@ -977,6 +1228,7 @@
     table.rotation.x = -Math.PI / 2;
     table.position.y = -2;
     table.receiveShadow = true;
+    table.visible = false;
     scene.add(table);
 
     const packGroup = new THREE.Group();
@@ -1148,6 +1400,7 @@
     function updateStats(result) {
       els.count.classList.remove("zero");
       els.note.classList.remove("warn");
+      if (els.optimalBadge) els.optimalBadge.hidden = true;
       if (!result || !result.ok) {
         els.count.textContent = "—";
         els.grid.textContent = "—";
@@ -1175,8 +1428,10 @@
       els.orient.textContent = fmtTriplet(result.Bx, result.By, result.Bz);
       els.leftover.textContent = fmtTriplet(result.leftover[0], result.leftover[1], result.leftover[2]);
       els.fill.textContent = (result.fill * 100).toFixed(1) + "%";
-      const label = state.name ? state.name + ". " : "";
-      els.note.textContent = `${label}${result.count} boxes, leftover along carton L / W / H.`;
+      const label = state.name ? state.name + ": " : "";
+      const unit = state.shape === "roll" ? "rolls" : "boxes";
+      els.note.textContent = `${label}${result.count} ${unit}, leftover along carton L / W / H.`;
+      if (els.optimalBadge) els.optimalBadge.hidden = result.fill < 0.72;
     }
 
     function refresh() {
@@ -1396,6 +1651,17 @@
         const data = await res.json();
         const rows = data.mockups || [];
         els.mockupList.innerHTML = "";
+        if (els.productSelect) {
+          const cur = els.productSelect.value;
+          els.productSelect.innerHTML = '<option value="">Custom</option>';
+          rows.forEach((row) => {
+            const opt = document.createElement("option");
+            opt.value = row.id;
+            opt.textContent = row.title || row.id;
+            els.productSelect.appendChild(opt);
+          });
+          if ([...els.productSelect.options].some((o) => o.value === cur)) els.productSelect.value = cur;
+        }
         if (!rows.length) {
           els.mockupList.innerHTML = '<p class="lede" style="margin:0">None saved yet.</p>';
           return;
@@ -1430,6 +1696,65 @@
         els.mockupList.innerHTML = '<p class="lede" style="margin:0">Start serve.py to save mockups.</p>';
       }
     }
+
+    if (els.productSelect) {
+      els.productSelect.addEventListener("change", async () => {
+        const id = els.productSelect.value;
+        if (!id) return;
+        const r = await fetch("/api/mockups/" + id);
+        if (!r.ok) return;
+        const saved = await r.json();
+        applySavedState(saved.state);
+      });
+    }
+
+    function setViewMode(mode) {
+      const is2d = mode === "2d";
+      if (els.view3d) els.view3d.setAttribute("aria-pressed", String(!is2d));
+      if (els.view2d) els.view2d.setAttribute("aria-pressed", String(is2d));
+      if (els.sheetPreview) {
+        els.sheetPreview.hidden = !is2d;
+        if (is2d) {
+          readInputs();
+          const box = state.box;
+          if (state.shape !== "box" || ![box.l, box.w, box.h].every((n) => Number.isFinite(n) && n > 0)) {
+            els.sheetPreview.innerHTML = '<p class="lede" style="padding:24px">2D sheet is for a retail box with positive L × W × H.</p>';
+          } else {
+            const q = new URLSearchParams({ l: String(box.l), w: String(box.w), h: String(box.h), name: state.name || "retail-box" });
+            els.sheetPreview.innerHTML = '<object type="image/svg+xml" data="/api/sheet.svg?' + q.toString() + '"></object>';
+          }
+        }
+      }
+    }
+    if (els.view3d) els.view3d.addEventListener("click", () => setViewMode("3d"));
+    if (els.view2d) els.view2d.addEventListener("click", () => setViewMode("2d"));
+    if (els.resetCamBtn) els.resetCamBtn.addEventListener("click", () => {
+      lastCartonKey = "";
+      refresh();
+    });
+    if (els.frontCamBtn) els.frontCamBtn.addEventListener("click", () => {
+      if (window.__cartonizer && window.__cartonizer.setFrontCamera) window.__cartonizer.setFrontCamera();
+    });
+    if (els.isoCamBtn) els.isoCamBtn.addEventListener("click", () => {
+      lastCartonKey = "";
+      userOrbit = false;
+      refresh();
+    });
+    if (els.helpBtn && els.helpDialog) els.helpBtn.addEventListener("click", () => els.helpDialog.showModal());
+    if (els.shareBtn) els.shareBtn.addEventListener("click", async () => {
+      readInputs();
+      const text = (state.name || "Pack") + " · " + (els.count.textContent || "") + " / carton · grid " + (els.grid.textContent || "");
+      try {
+        await navigator.clipboard.writeText(text);
+        els.grokStatus.textContent = "Copied pack line";
+      } catch {
+        els.grokStatus.textContent = text;
+      }
+    });
+    if (els.themeBtn) els.themeBtn.addEventListener("click", () => {
+      const dark = document.documentElement.getAttribute("data-theme") === "dark";
+      document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+    });
 
     els.saveBtn.addEventListener("click", async () => {
       readInputs();

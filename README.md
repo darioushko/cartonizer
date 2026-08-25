@@ -8,6 +8,8 @@ It does two jobs:
 2. **Industrial carton math.** You enter the retail pack size and the shipping carton inner size. The tool tries all six axis-aligned orientations, picks the densest regular grid, and shows how many units fit, leftover millimetres, and fill percent. Change bag count, film, or carton size to compare configurations.
 
 The published repo is the **plain tool**: app + schema, without any samples. 
+<img width="397" height="455" alt="image" src="https://github.com/user-attachments/assets/951ad0f0-8e74-40ed-84ac-cfcd7faa0629" />
+
 
 ## Run
 

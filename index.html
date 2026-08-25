@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cartonizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <style>
+    :root {
+      --ink: #171411;
+      --table: #241e18;
+      --panel: #1e1a16;
+      --kraft: #c4a06a;
+      --kraft-dark: #8a6a3d;
+      --box: #e6c27a;
+      --paper: #f3ece0;
+      --mute: #9a8f80;
+      --line: #3a3228;
+      --stamp: #c45c3a;
+      --ok: #c4a06a;
+      --focus: #e6c27a;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: grid;
+      grid-template-columns: 288px minmax(0, 1fr) 268px;
+      grid-template-rows: minmax(0, 1fr) 270px;
+      grid-template-areas:
+        "left stage right"
+        "left grok right";
+      background: var(--ink);
+      color: var(--paper);
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      font-size: 14px;
+    }
+    .panel-left { grid-area: left; }
+    #stage { grid-area: stage; }
+    .panel-right { grid-area: right; }
+    #grok { grid-area: grok; }
+    button, input { font: inherit; color: inherit; }
+    .panel {
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      padding: 22px 20px 28px;
+      overflow: auto;
+    }
+    .panel-right {
+      border-right: 0;
+      border-left: 1px solid var(--line);
+      background:
+        radial-gradient(circle at 0 12px, transparent 5px, var(--panel) 6px) 0 0 / 12px 18px repeat-y,
+        var(--panel);
+      padding-left: 28px;
+    }
+    .eyebrow {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--kraft);
+      margin: 0 0 6px;
+    }
+    h1 {
+      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin: 0 0 4px;
+      line-height: 0.95;
+    }
+    .lede {
+      color: var(--mute);
+      margin: 0 0 22px;
+      line-height: 1.4;
+    }
+    label.field {
+      display: block;
+      margin-bottom: 10px;
+    }
+    label.field span {
+      display: block;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--mute);
+      margin-bottom: 5px;
+    }
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      background: #14110e;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      padding: 8px 10px;
+      outline: none;
+    }
+    select { color: inherit; }
+    input[type="number"] { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+    input:focus { border-color: var(--focus); }
+    .dims {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .section-label {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--kraft);
+      margin: 18px 0 8px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    #contentsClingWrap[hidden], #contentsPcsWrap[hidden], #filmMicWrap[hidden], #bagMmWrap[hidden], #compareWrap[hidden] { display: none !important; }
+    #compareWrap { overflow-x: auto; }
+    #variantsTable { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 8px; }
+    #variantsTable th, #variantsTable td {
+      text-align: left;
+      padding: 3px 4px;
+      border-bottom: 1px solid var(--line);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      white-space: nowrap;
+    }
+    #variantsTable th { color: var(--mute); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; font-size: 9px; }
+    #variantsTable tr.base td { color: var(--box); }
+    #compareBtn {
+      width: 100%;
+      margin-top: 6px;
+      background: transparent;
+      color: var(--paper);
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #compareBtn:hover { border-color: var(--kraft); color: var(--box); }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .chip {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--paper);
+      padding: 5px 9px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .chip[aria-pressed="true"] {
+      border-color: var(--kraft);
+      background: #2c2418;
+      color: var(--box);
+    }
+    .chip:focus-visible, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .units {
+      display: flex;
+      gap: 0;
+      margin: 8px 0 4px;
+      border: 1px solid var(--line);
+      width: fit-content;
+    }
+    .units button {
+      background: transparent;
+      border: 0;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+    }
+    .units button[aria-pressed="true"] { background: #2c2418; color: var(--box); }
+    #stage {
+      position: relative;
+      background: radial-gradient(ellipse at 50% 70%, #2a241c 0%, #171411 62%);
+      min-height: 280px;
+    }
+    #stage canvas { display: block; width: 100%; height: 100%; }
+    .hint {
+      position: absolute;
+      left: 16px;
+      bottom: 12px;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--mute);
+      pointer-events: none;
+    }
+    .count {
+      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+      font-size: 92px;
+      font-weight: 700;
+      line-height: 0.82;
+      letter-spacing: 0.02em;
+      color: var(--box);
+      margin: 4px 0 0;
+    }
+    .count.zero { color: var(--stamp); }
+    .count-unit {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--mute);
+      margin: 8px 0 18px;
+    }
+    .stat {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 6px 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .stat dt {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--mute);
+      margin: 0;
+      padding-top: 3px;
+    }
+    .stat dd { margin: 0; }
+    #note {
+      min-height: 2.4em;
+      color: var(--mute);
+      line-height: 1.4;
+      margin: 16px 0 18px;
+    }
+    #note.warn { color: #e8b0a0; }
+    #pngBtn {
+      width: 100%;
+      background: var(--kraft);
+      color: var(--ink);
+      border: 0;
+      padding: 12px 14px;
+      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    #pngBtn:hover { background: var(--box); }
+    #saveBtn {
+      width: 100%;
+      margin-top: 8px;
+      background: transparent;
+      color: var(--paper);
+      border: 1px solid var(--kraft);
+      padding: 10px 14px;
+      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    #saveBtn:hover { background: #2c2418; }
+    #mockupList { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .mockup-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 6px;
+      align-items: center;
+      font-size: 12px;
+    }
+    .mockup-row button {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--paper);
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .mockup-row .open { border-color: var(--kraft); color: var(--box); }
+    #grok {
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--line);
+      background: var(--panel);
+      min-height: 0;
+    }
+    #grokHead {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px 8px;
+      background: var(--panel);
+      z-index: 1;
+    }
+    #grokStatus { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10px; letter-spacing: 0.08em; color: var(--mute); }
+    #grokLog {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 8px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .bubble {
+      max-width: 92%;
+      padding: 8px 10px;
+      border-radius: 2px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+    .bubble.user { align-self: flex-end; background: #2c2418; }
+    .bubble.bot { align-self: flex-start; background: #14110e; border: 1px solid var(--line); }
+    .bubble.think { color: var(--mute); font-style: italic; border-style: dashed; }
+    .bubble img { display: block; max-height: 88px; margin-top: 6px; }
+    #grokForm {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 8px;
+      padding: 8px 14px 12px;
+      border-top: 1px solid var(--line);
+      align-items: end;
+    }
+    #grokText {
+      width: 100%;
+      min-height: 40px;
+      max-height: 88px;
+      resize: vertical;
+      background: #14110e;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      padding: 8px 10px;
+      outline: none;
+    }
+    #grokText:focus { border-color: var(--focus); }
+    #attachBtn, #grokSend {
+      background: transparent;
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #grokSend {
+      background: var(--kraft);
+      color: var(--ink);
+      border: 0;
+      font-family: "Barlow Condensed", "Arial Narrow", sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    #grokSend:disabled { opacity: 0.45; cursor: default; }
+    #attachName { display: none; }
+    @media (max-width: 900px) {
+      body {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 42vh auto auto;
+        grid-template-areas:
+          "left"
+          "stage"
+          "grok"
+          "right";
+      }
+      .panel { border-right: 0; border-bottom: 1px solid var(--line); max-height: none; }
+      .panel-right {
+        border-left: 0;
+        background: var(--panel);
+        padding-left: 20px;
+      }
+      .count { font-size: 64px; }
+      #grok { border-top: 0; min-height: 220px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="panel panel-left" aria-label="Sizes">
+    <p class="eyebrow">Packing table</p>
+    <h1>Cartonizer</h1>
+    <p class="lede">How many retail boxes fit in one shipping carton.</p>
+
+    <label class="field">
+      <span>SKU name</span>
+      <input id="name" type="text" maxlength="80" placeholder="Optional" autocomplete="off" />
+    </label>
+    <label class="field">
+      <span>Group</span>
+      <select id="group">
+        <option value="">—</option>
+        <option value="10L">10L</option>
+        <option value="25L">25L</option>
+        <option value="50L">50L</option>
+        <option value="Ziploc">Ziploc</option>
+        <option value="Frischhaltefolie">Frischhaltefolie</option>
+      </select>
+    </label>
+    <div class="chips" role="group" aria-label="Product type">
+      <button type="button" class="chip" data-category="cling" data-name="Cling wrap">Cling wrap</button>
+      <button type="button" class="chip" data-category="zip_bag" data-name="Zip bags">Zip bags</button>
+      <button type="button" class="chip" data-category="trash_bag" data-name="Trash bags">Trash bags</button>
+      <button type="button" class="chip" data-category="" data-name="">Custom</button>
+    </div>
+
+    <div id="contentsPcsWrap">
+      <label class="field">
+        <span id="contentsPcsLabel">Bags per roll</span>
+        <input id="pcsPerPack" type="number" min="0" step="1" placeholder="e.g. 37" />
+      </label>
+      <label class="field" id="filmMicWrap" hidden>
+        <span>Film thickness µm (one side)</span>
+        <input id="filmMic" type="number" min="0" step="any" placeholder="e.g. 20" />
+      </label>
+      <div id="bagMmWrap" class="dims" hidden>
+        <label class="field"><span>Bag W mm</span><input id="bagWidthMm" type="number" min="0" step="any" placeholder="530" /></label>
+        <label class="field"><span>Bag L mm</span><input id="bagLengthMm" type="number" min="0" step="any" placeholder="590" /></label>
+      </div>
+    </div>
+    <div id="contentsClingWrap" class="dims" hidden>
+      <label class="field"><span>Film width cm</span><input id="filmWidthCm" type="number" min="0" step="any" placeholder="29" /></label>
+      <label class="field"><span>Film length m</span><input id="filmLengthM" type="number" min="0" step="any" placeholder="20" /></label>
+    </div>
+
+    <div class="section-label">Retail box</div>
+    <div class="dims">
+      <label class="field"><span>L</span><input id="boxL" type="number" min="0" step="any" /></label>
+      <label class="field"><span>W</span><input id="boxW" type="number" min="0" step="any" /></label>
+      <label class="field"><span>H</span><input id="boxH" type="number" min="0" step="any" /></label>
+    </div>
+
+    <div class="section-label">Carton inner</div>
+    <div class="dims">
+      <label class="field"><span>L</span><input id="cartonL" type="number" min="0" step="any" /></label>
+      <label class="field"><span>W</span><input id="cartonW" type="number" min="0" step="any" /></label>
+      <label class="field"><span>H</span><input id="cartonH" type="number" min="0" step="any" /></label>
+    </div>
+
+    <div class="section-label">Shape</div>
+    <div class="units" role="group" aria-label="Shape">
+      <button type="button" id="shapeBox" aria-pressed="true">Box</button>
+      <button type="button" id="shapeRoll" aria-pressed="false">Roll</button>
+    </div>
+
+    <div class="section-label">Unit</div>
+    <div class="units" role="group" aria-label="Unit">
+      <button type="button" id="unitMm" aria-pressed="true">mm</button>
+      <button type="button" id="unitCm" aria-pressed="false">cm</button>
+    </div>
+
+    <div class="section-label">Mockups</div>
+    <div id="mockupList"></div>
+  </aside>
+
+  <main id="stage">
+    <div class="hint">drag to orbit · scroll to zoom · right-drag to pan</div>
+  </main>
+
+  <section id="grok" aria-label="Grok chat">
+    <div id="grokHead">
+      <p class="eyebrow" style="margin:0">Grok Build</p>
+      <span id="grokStatus">connecting…</span>
+    </div>
+    <div id="grokLog"></div>
+    <form id="grokForm">
+      <button type="button" id="attachBtn">Photo</button>
+      <textarea id="grokText" rows="2" placeholder="Dieline, Measure photos, or product shot. Fold the pack, estimate the roll, pack the carton."></textarea>
+      <button type="submit" id="grokSend">Send</button>
+      <input id="attachFile" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden />
+    </form>
+  </section>
+
+  <aside class="panel panel-right" aria-label="Fit">
+    <p class="eyebrow">Fit</p>
+    <p id="count" class="count">—</p>
+    <p class="count-unit" id="countUnit">boxes / carton</p>
+    <dl>
+      <div class="stat"><dt>Grid</dt><dd id="grid">—</dd></div>
+      <div class="stat"><dt>Packed as</dt><dd id="orient">—</dd></div>
+      <div class="stat"><dt>Leftover</dt><dd id="leftover">—</dd></div>
+      <div class="stat"><dt>Fill</dt><dd id="fill">—</dd></div>
+    </dl>
+    <p id="note"></p>
+    <div id="compareWrap" hidden>
+      <div class="section-label" style="margin-top:8px">Bag-count scale</div>
+      <label class="field">
+        <span>Compare bags / roll</span>
+        <input id="compareCounts" type="text" placeholder="12,15,18,25" />
+      </label>
+      <button type="button" id="compareBtn">Compare diameters</button>
+      <table id="variantsTable"></table>
+    </div>
+    <button type="button" id="pngBtn">Download PNG</button>
+    <button type="button" id="saveBtn">Save mockup</button>
+  </aside>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const STORAGE_KEY = "cartonizer:v1";
+    const GROUPS = ["10L", "25L", "50L", "Ziploc", "Frischhaltefolie"];
+    const GROUP_COUNTS = { "10L": "20,25,30,37", "25L": "12,15,18,25", "50L": "8,10,12,15" };
+    const DEFAULT_STATE = {
+      name: "",
+      sku: "",
+      group: "",
+      unit: "mm",
+      shape: "box",
+      category: "",
+      pcs_per_pack: null,
+      film_width_cm: null,
+      film_length_m: null,
+      film_thickness_mic: null,
+      bag_width_mm: null,
+      bag_length_mm: null,
+      textureUrl: "",
+      textureFront: "",
+      textureBack: "",
+      textureSide: "",
+      box: { l: 100, w: 50, h: 40 },
+      carton: { l: 400, w: 300, h: 200 },
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const els = {
+      name: $("name"),
+      group: $("group"),
+      boxL: $("boxL"),
+      boxW: $("boxW"),
+      boxH: $("boxH"),
+      cartonL: $("cartonL"),
+      cartonW: $("cartonW"),
+      cartonH: $("cartonH"),
+      unitMm: $("unitMm"),
+      unitCm: $("unitCm"),
+      count: $("count"),
+      countUnit: $("countUnit"),
+      grid: $("grid"),
+      orient: $("orient"),
+      leftover: $("leftover"),
+      fill: $("fill"),
+      note: $("note"),
+      pngBtn: $("pngBtn"),
+      saveBtn: $("saveBtn"),
+      mockupList: $("mockupList"),
+      pcsPerPack: $("pcsPerPack"),
+      contentsPcsLabel: $("contentsPcsLabel"),
+      contentsPcsWrap: $("contentsPcsWrap"),
+      contentsClingWrap: $("contentsClingWrap"),
+      filmWidthCm: $("filmWidthCm"),
+      filmLengthM: $("filmLengthM"),
+      filmMic: $("filmMic"),
+      filmMicWrap: $("filmMicWrap"),
+      bagMmWrap: $("bagMmWrap"),
+      bagWidthMm: $("bagWidthMm"),
+      bagLengthMm: $("bagLengthMm"),
+      compareWrap: $("compareWrap"),
+      compareCounts: $("compareCounts"),
+      compareBtn: $("compareBtn"),
+      variantsTable: $("variantsTable"),
+      stage: $("stage"),
+      shapeBox: $("shapeBox"),
+      shapeRoll: $("shapeRoll"),
+      grokLog: $("grokLog"),
+      grokText: $("grokText"),
+      grokForm: $("grokForm"),
+      grokSend: $("grokSend"),
+      grokStatus: $("grokStatus"),
+      attachBtn: $("attachBtn"),
+      attachFile: $("attachFile"),
+    };
+
+    function packCarton(box, carton) {
+      const Cx = carton.l, Cy = carton.w, Cz = carton.h;
+      if (![box.l, box.w, box.h, Cx, Cy, Cz].every((n) => Number.isFinite(n) && n > 0)) {
+        return { ok: false, reason: "invalid" };
+      }
+      const orients = [
+        [box.l, box.w, box.h],
+        [box.l, box.h, box.w],
+        [box.w, box.l, box.h],
+        [box.w, box.h, box.l],
+        [box.h, box.l, box.w],
+        [box.h, box.w, box.l],
+      ];
+      let best = null;
+      for (const [Bx, By, Bz] of orients) {
+        const nx = Math.floor(Cx / Bx);
+        const ny = Math.floor(Cy / By);
+        const nz = Math.floor(Cz / Bz);
+        const count = nx * ny * nz;
+        const leftover = [Cx - nx * Bx, Cy - ny * By, Cz - nz * Bz];
+        const volC = Cx * Cy * Cz;
+        const fill = volC === 0 ? 0 : (count * Bx * By * Bz) / volC;
+        if (!best || count > best.count) {
+          best = { ok: true, Bx, By, Bz, nx, ny, nz, count, leftover, fill, Cx, Cy, Cz };
+        }
+      }
+      return best;
+    }
+
+    function runPackTests() {
+      const failures = [];
+      const a = packCarton({ l: 100, w: 50, h: 40 }, { l: 400, w: 300, h: 200 });
+      if (a.count !== 120 || a.nx !== 4 || a.ny !== 6 || a.nz !== 5) {
+        failures.push("120 pack");
+      }
+      if (a.leftover.some((v) => v !== 0) || Math.abs(a.fill - 1) > 1e-9) {
+        failures.push("100% fill");
+      }
+      if (a.Bx !== 100 || a.By !== 50 || a.Bz !== 40) failures.push("tie keeps first orientation");
+      const b = packCarton({ l: 100, w: 50, h: 40 }, { l: 410, w: 300, h: 200 });
+      if (b.count !== 120 || Math.abs(b.leftover[0] - 10) > 1e-9) failures.push("leftover L 10");
+      const c = packCarton({ l: 200, w: 200, h: 200 }, { l: 100, w: 100, h: 100 });
+      if (c.count !== 0) failures.push("too big is 0");
+      const d = packCarton({ l: 0, w: 50, h: 40 }, { l: 400, w: 300, h: 200 });
+      if (d.ok !== false) failures.push("zero size invalid");
+      return failures;
+    }
+
+    const testFail = runPackTests();
+    if (testFail.length) console.error("pack tests failed:", testFail);
+    else console.assert(true, "pack tests ok");
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return { ...DEFAULT_STATE, box: { ...DEFAULT_STATE.box }, carton: { ...DEFAULT_STATE.carton } };
+        const s = JSON.parse(raw);
+        return {
+          name: typeof s.name === "string" ? s.name : "",
+          sku: typeof s.sku === "string" ? s.sku : "",
+          group: GROUPS.includes(s.group) ? s.group : "",
+          unit: s.unit === "cm" ? "cm" : "mm",
+          shape: s.shape === "roll" ? "roll" : "box",
+          category: ["cling", "zip_bag", "trash_bag"].includes(s.category) ? s.category : "",
+          pcs_per_pack: s.pcs_per_pack != null && s.pcs_per_pack !== "" ? Number(s.pcs_per_pack) : null,
+          film_width_cm: s.film_width_cm != null && s.film_width_cm !== "" ? Number(s.film_width_cm) : null,
+          film_length_m: s.film_length_m != null && s.film_length_m !== "" ? Number(s.film_length_m) : null,
+          film_thickness_mic: s.film_thickness_mic != null && s.film_thickness_mic !== "" ? Number(s.film_thickness_mic) : null,
+          bag_width_mm: s.bag_width_mm != null && s.bag_width_mm !== "" ? Number(s.bag_width_mm) : null,
+          bag_length_mm: s.bag_length_mm != null && s.bag_length_mm !== "" ? Number(s.bag_length_mm) : null,
+          textureUrl: typeof s.textureUrl === "string" ? s.textureUrl : "",
+          textureFront: typeof s.textureFront === "string" ? s.textureFront : "",
+          textureBack: typeof s.textureBack === "string" ? s.textureBack : "",
+          textureSide: typeof s.textureSide === "string" ? s.textureSide : "",
+          box: {
+            l: Number(s.box?.l) || DEFAULT_STATE.box.l,
+            w: Number(s.box?.w) || DEFAULT_STATE.box.w,
+            h: Number(s.box?.h) || DEFAULT_STATE.box.h,
+          },
+          carton: {
+            l: Number(s.carton?.l) || DEFAULT_STATE.carton.l,
+            w: Number(s.carton?.w) || DEFAULT_STATE.carton.w,
+            h: Number(s.carton?.h) || DEFAULT_STATE.carton.h,
+          },
+        };
+      } catch {
+        return { ...DEFAULT_STATE, box: { ...DEFAULT_STATE.box }, carton: { ...DEFAULT_STATE.carton } };
+      }
+    }
+
+    const state = loadState();
+
+    function fromMm(mm) {
+      const n = state.unit === "cm" ? mm / 10 : mm;
+      return Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000);
+    }
+    function toMm(raw) {
+      const n = parseFloat(raw);
+      if (!Number.isFinite(n)) return NaN;
+      return state.unit === "cm" ? n * 10 : n;
+    }
+    function fmtMm(mm) {
+      return state.unit === "cm" ? fromMm(mm) + " cm" : Math.round(mm * 1000) / 1000 + " mm";
+    }
+    function fmtTriplet(a, b, c) {
+      const u = state.unit === "cm" ? "cm" : "mm";
+      return `${fromMm(a)} × ${fromMm(b)} × ${fromMm(c)} ${u}`;
+    }
+
+    function writeInputs() {
+      els.name.value = state.name;
+      if (els.group) els.group.value = GROUPS.includes(state.group) ? state.group : "";
+      els.boxL.value = fromMm(state.box.l);
+      els.boxW.value = fromMm(state.box.w);
+      els.boxH.value = fromMm(state.box.h);
+      els.cartonL.value = fromMm(state.carton.l);
+      els.cartonW.value = fromMm(state.carton.w);
+      els.cartonH.value = fromMm(state.carton.h);
+      els.unitMm.setAttribute("aria-pressed", String(state.unit === "mm"));
+      els.unitCm.setAttribute("aria-pressed", String(state.unit === "cm"));
+      els.shapeBox.setAttribute("aria-pressed", String(state.shape !== "roll"));
+      els.shapeRoll.setAttribute("aria-pressed", String(state.shape === "roll"));
+      const step = state.unit === "cm" ? "0.1" : "1";
+      for (const id of ["boxL", "boxW", "boxH", "cartonL", "cartonW", "cartonH"]) els[id].step = step;
+      document.querySelectorAll(".chip").forEach((btn) => {
+        btn.setAttribute("aria-pressed", String((btn.dataset.category || "") === (state.category || "")));
+      });
+      if (els.pcsPerPack) {
+        els.pcsPerPack.value = state.pcs_per_pack != null ? state.pcs_per_pack : "";
+      }
+      if (els.filmWidthCm) els.filmWidthCm.value = state.film_width_cm != null ? state.film_width_cm : "";
+      if (els.filmLengthM) els.filmLengthM.value = state.film_length_m != null ? state.film_length_m : "";
+      if (els.filmMic) els.filmMic.value = state.film_thickness_mic != null ? state.film_thickness_mic : "";
+      if (els.bagWidthMm) els.bagWidthMm.value = state.bag_width_mm != null ? state.bag_width_mm : "";
+      if (els.bagLengthMm) els.bagLengthMm.value = state.bag_length_mm != null ? state.bag_length_mm : "";
+      if (els.compareCounts && !els.compareCounts.value) {
+        els.compareCounts.value = GROUP_COUNTS[state.group] || "12,15,18,25";
+      }
+      updateContentsUI();
+    }
+
+    function updateContentsUI() {
+      const cat = state.category || "";
+      const cling = cat === "cling";
+      const trash = cat === "trash_bag";
+      if (els.contentsClingWrap) els.contentsClingWrap.hidden = !cling;
+      if (els.contentsPcsWrap) els.contentsPcsWrap.hidden = cling;
+      if (els.filmMicWrap) els.filmMicWrap.hidden = !trash;
+      if (els.bagMmWrap) els.bagMmWrap.hidden = !trash;
+      if (els.compareWrap) els.compareWrap.hidden = !trash;
+      if (els.contentsPcsLabel) {
+        els.contentsPcsLabel.textContent =
+          cat === "trash_bag" ? "Bags per roll (not rolls in the carton)" :
+          cat === "zip_bag" ? "Pieces per box" :
+          "Bags / pieces per pack";
+      }
+    }
+
+    function readInputs() {
+      state.name = els.name.value;
+      state.group = els.group && GROUPS.includes(els.group.value) ? els.group.value : "";
+      state.box = { l: toMm(els.boxL.value), w: toMm(els.boxW.value), h: toMm(els.boxH.value) };
+      state.carton = { l: toMm(els.cartonL.value), w: toMm(els.cartonW.value), h: toMm(els.cartonH.value) };
+      const pcs = parseFloat(els.pcsPerPack && els.pcsPerPack.value);
+      state.pcs_per_pack = Number.isFinite(pcs) && pcs > 0 ? pcs : null;
+      const fw = parseFloat(els.filmWidthCm && els.filmWidthCm.value);
+      const fl = parseFloat(els.filmLengthM && els.filmLengthM.value);
+      state.film_width_cm = Number.isFinite(fw) && fw > 0 ? fw : null;
+      state.film_length_m = Number.isFinite(fl) && fl > 0 ? fl : null;
+      const mic = parseFloat(els.filmMic && els.filmMic.value);
+      state.film_thickness_mic = Number.isFinite(mic) && mic > 0 ? mic : null;
+      const bw = parseFloat(els.bagWidthMm && els.bagWidthMm.value);
+      const bl = parseFloat(els.bagLengthMm && els.bagLengthMm.value);
+      state.bag_width_mm = Number.isFinite(bw) && bw > 0 ? bw : null;
+      state.bag_length_mm = Number.isFinite(bl) && bl > 0 ? bl : null;
+    }
+
+    function persist() {
+      const valid = [state.box.l, state.box.w, state.box.h, state.carton.l, state.carton.w, state.carton.h]
+        .every((n) => Number.isFinite(n) && n > 0);
+      if (!valid) return;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        name: state.name,
+        sku: state.sku || "",
+        group: state.group || "",
+        unit: state.unit,
+        shape: state.shape,
+        category: state.category || "",
+        pcs_per_pack: state.pcs_per_pack,
+        film_width_cm: state.film_width_cm,
+        film_length_m: state.film_length_m,
+        film_thickness_mic: state.film_thickness_mic,
+        bag_width_mm: state.bag_width_mm,
+        bag_length_mm: state.bag_length_mm,
+        textureUrl: state.textureUrl || "",
+        textureFront: state.textureFront || "",
+        textureBack: state.textureBack || "",
+        textureSide: state.textureSide || "",
+        box: state.box,
+        carton: state.carton,
+      }));
+    }
+
+    function kraftTexture() {
+      const c = document.createElement("canvas");
+      c.width = 64;
+      c.height = 64;
+      const g = c.getContext("2d");
+      g.fillStyle = "#c4a06a";
+      g.fillRect(0, 0, 64, 64);
+      g.fillStyle = "rgba(80, 52, 22, 0.16)";
+      for (let x = 0; x < 64; x += 4) g.fillRect(x, 0, 2, 64);
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = 4;
+      return t;
+    }
+
+    const kraftMap = kraftTexture();
+    const kraftMat = new THREE.MeshStandardMaterial({
+      map: kraftMap,
+      color: 0xd4b07a,
+      roughness: 0.92,
+      metalness: 0.02,
+      transparent: true,
+      opacity: 0.22,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const kraftSolid = new THREE.MeshStandardMaterial({
+      map: kraftMap,
+      color: 0xc4a06a,
+      roughness: 0.9,
+      metalness: 0.02,
+    });
+    const lipMat = new THREE.MeshStandardMaterial({
+      map: kraftMap,
+      color: 0x9a7544,
+      roughness: 0.88,
+      metalness: 0.02,
+    });
+    const boxMat = new THREE.MeshStandardMaterial({
+      color: 0xf3d7a4,
+      roughness: 0.48,
+      metalness: 0.03,
+    });
+    const productMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.42,
+      metalness: 0.04,
+    });
+    let productMap = null;
+    let productMapBack = null;
+    let productMapSide = null;
+    const texLoader = new THREE.TextureLoader();
+    const frontMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.42, metalness: 0.04 });
+    const backMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45, metalness: 0.03 });
+    const sideMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45, metalness: 0.03 });
+
+    function productMaterial() {
+      if (productMap) {
+        productMat.map = productMap;
+        productMat.color.set(0xffffff);
+      } else {
+        productMat.map = null;
+        productMat.color.set(0xf3d7a4);
+      }
+      productMat.needsUpdate = true;
+      return productMap ? productMat : boxMat;
+    }
+
+    function loadTex(url, assign) {
+      texLoader.load(url, (t) => {
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.wrapS = THREE.ClampToEdgeWrapping;
+        t.wrapT = THREE.ClampToEdgeWrapping;
+        assign(t);
+        refresh();
+      });
+    }
+
+    function loadProductTexture(url) {
+      if (!url) {
+        productMap = null;
+        return;
+      }
+      state.textureUrl = url;
+      loadTex(url, (t) => { productMap = t; });
+    }
+
+    function loadProductFaces(faces) {
+      if (faces.front) {
+        state.textureFront = faces.front;
+        state.textureUrl = faces.front;
+        loadTex(faces.front, (t) => { productMap = t; });
+      }
+      if (faces.back) {
+        state.textureBack = faces.back;
+        loadTex(faces.back, (t) => { productMapBack = t; });
+      }
+      if (faces.side) {
+        state.textureSide = faces.side;
+        loadTex(faces.side, (t) => { productMapSide = t; });
+      }
+    }
+
+    function boxFaceMaterials(Bx, By, Bz) {
+      frontMat.map = productMap;
+      frontMat.color.set(productMap ? 0xffffff : 0xf3d7a4);
+      frontMat.needsUpdate = true;
+      backMat.map = productMapBack || null;
+      backMat.color.set(productMapBack ? 0xffffff : 0xc4a06a);
+      backMat.needsUpdate = true;
+      sideMat.map = productMapSide || null;
+      sideMat.color.set(productMapSide ? 0xffffff : 0xb08950);
+      sideMat.needsUpdate = true;
+      const top = kraftSolid;
+      const L = state.box.l, H = state.box.h;
+      const close = (a, b) => Math.abs(a - b) < 0.8;
+      const isPrint = (a, b) => (close(a, L) && close(b, H)) || (close(a, H) && close(b, L));
+      // +X/-X = Bz x By, +Y/-Y = Bx x By, +Z/-Z = Bx x Bz
+      if (isPrint(Bz, By)) return [frontMat, backMat, top, top, sideMat, sideMat];
+      if (isPrint(Bx, By)) return [sideMat, sideMat, frontMat, backMat, sideMat, sideMat];
+      return [sideMat, sideMat, top, top, frontMat, backMat];
+    }
+    const tableMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1612,
+      roughness: 1,
+      metalness: 0,
+    });
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x171411);
+    scene.fog = new THREE.Fog(0x171411, 900, 2800);
+
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 20000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.shadowMap.enabled = true;
+    els.stage.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI * 0.49;
+
+    scene.add(new THREE.HemisphereLight(0xf0e6d4, 0x2a2018, 0.85));
+    const key = new THREE.DirectionalLight(0xfff3dd, 1.05);
+    key.position.set(400, 700, 320);
+    key.castShadow = true;
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0x8899aa, 0.28);
+    fill.position.set(-300, 200, -200);
+    scene.add(fill);
+
+    const table = new THREE.Mesh(new THREE.CircleGeometry(4000, 48), tableMat);
+    table.rotation.x = -Math.PI / 2;
+    table.position.y = -2;
+    table.receiveShadow = true;
+    scene.add(table);
+
+    const packGroup = new THREE.Group();
+    scene.add(packGroup);
+
+    let lastCartonKey = "";
+    let lastResult = null;
+    let userOrbit = false;
+    controls.addEventListener("start", () => { userOrbit = true; });
+
+    function disposePack() {
+      packGroup.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+      });
+      while (packGroup.children.length) packGroup.remove(packGroup.children[0]);
+    }
+
+    function frameCarton(Cx, Cy, Cz) {
+      const foot = Math.max(Cx, Cy, 1);
+      const cx = Cx / 2, cy = Cz / 2, cz = Cy / 2;
+      controls.target.set(cx, cy * 0.5, cz);
+      if (Cz > foot * 1.25) {
+        camera.position.set(cx + foot * 1.6, cy * 0.55, cz + foot * 2.4);
+      } else {
+        const size = Math.max(Cx, Cy, Cz, 1);
+        camera.position.set(cx + size * 1.45, cy + size * 0.68, cz + size * 1.6);
+      }
+      camera.near = Math.max(0.1, Math.max(Cx, Cy, Cz) / 200);
+      camera.far = Math.max(Cx, Cy, Cz) * 40;
+      camera.updateProjectionMatrix();
+      controls.update();
+    }
+
+    function buildCarton(Cx, Cy, Cz) {
+      const wall = Math.max(2.5, Math.min(Cx, Cy, Cz) * 0.012);
+      kraftMap.repeat.set(Math.max(2, Cx / 40), Math.max(2, Cz / 40));
+
+      const floor = new THREE.Mesh(
+        new THREE.BoxGeometry(Cx + wall * 2, wall, Cy + wall * 2),
+        kraftSolid
+      );
+      floor.position.set(Cx / 2, -wall / 2, Cy / 2);
+      floor.receiveShadow = true;
+      packGroup.add(floor);
+
+      const mkWall = (w, h, d, x, y, z) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), kraftMat);
+        m.position.set(x, y, z);
+        m.castShadow = true;
+        packGroup.add(m);
+      };
+      mkWall(wall, Cz, Cy + wall * 2, -wall / 2, Cz / 2, Cy / 2);
+      mkWall(wall, Cz, Cy + wall * 2, Cx + wall / 2, Cz / 2, Cy / 2);
+      mkWall(Cx, Cz, wall, Cx / 2, Cz / 2, -wall / 2);
+      mkWall(Cx, Cz, wall, Cx / 2, Cz / 2, Cy + wall / 2);
+
+      const lip = Math.max(3, wall * 1.2);
+      const mkLip = (w, h, d, x, y, z) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lipMat);
+        m.position.set(x, y, z);
+        packGroup.add(m);
+      };
+      mkLip(Cx + wall * 2, lip, wall, Cx / 2, Cz + lip / 2, -wall / 2);
+      mkLip(Cx + wall * 2, lip, wall, Cx / 2, Cz + lip / 2, Cy + wall / 2);
+      mkLip(wall, lip, Cy, -wall / 2, Cz + lip / 2, Cy / 2);
+      mkLip(wall, lip, Cy, Cx + wall / 2, Cz + lip / 2, Cy / 2);
+    }
+
+    function buildBoxes(result) {
+      const { Bx, By, Bz, nx, ny, nz, count } = result;
+      if (count <= 0) return;
+      const gap = Math.min(Bx, By, Bz) * 0.012;
+      const sx = Math.max(Bx - gap, Bx * 0.92);
+      const sy = Math.max(Bz - gap, Bz * 0.92);
+      const sz = Math.max(By - gap, By * 0.92);
+      const maxDraw = 8000;
+      const draw = Math.min(count, maxDraw);
+      const mat = productMaterial();
+      const isRoll = state.shape === "roll";
+      const printedBox = !isRoll && !!productMap && draw <= 200;
+
+      if (count > maxDraw) {
+        const block = new THREE.Mesh(
+          new THREE.BoxGeometry(nx * Bx, nz * Bz, ny * By),
+          mat
+        );
+        block.position.set((nx * Bx) / 2, (nz * Bz) / 2, (ny * By) / 2);
+        block.castShadow = true;
+        packGroup.add(block);
+        return;
+      }
+
+      if (printedBox) {
+        const geo = new THREE.BoxGeometry(sx, sy, sz);
+        const mats = boxFaceMaterials(Bx, By, Bz);
+        for (let i = 0; i < nx; i++) {
+          for (let j = 0; j < ny; j++) {
+            for (let k = 0; k < nz; k++) {
+              const mesh = new THREE.Mesh(geo, mats);
+              mesh.position.set(i * Bx + Bx / 2, k * Bz + Bz / 2, j * By + By / 2);
+              mesh.castShadow = true;
+              mesh.receiveShadow = true;
+              packGroup.add(mesh);
+            }
+          }
+        }
+        return;
+      }
+
+      const radius = Math.min(sy, sz) / 2;
+      const geo = isRoll
+        ? new THREE.CylinderGeometry(radius, radius, sx, 20)
+        : new THREE.BoxGeometry(sx, sy, sz);
+      const mesh = new THREE.InstancedMesh(geo, mat, draw);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const dummy = new THREE.Object3D();
+      const cA = new THREE.Color(0xf3d7a4);
+      const cB = new THREE.Color(0xe4c48a);
+      let n = 0;
+      for (let i = 0; i < nx && n < draw; i++) {
+        for (let j = 0; j < ny && n < draw; j++) {
+          for (let k = 0; k < nz && n < draw; k++) {
+            dummy.position.set(i * Bx + Bx / 2, k * Bz + Bz / 2, j * By + By / 2);
+            dummy.rotation.set(0, 0, isRoll ? Math.PI / 2 : 0);
+            dummy.updateMatrix();
+            mesh.setMatrixAt(n, dummy.matrix);
+            if (!productMap) mesh.setColorAt(n, (i + j + k) % 2 ? cB : cA);
+            n++;
+          }
+        }
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      packGroup.add(mesh);
+    }
+
+    function overflowNote(box, carton) {
+      const bits = [];
+      if (box.l > carton.l) bits.push(`L ${fromMm(box.l)} > ${fromMm(carton.l)}`);
+      if (box.w > carton.w) bits.push(`W ${fromMm(box.w)} > ${fromMm(carton.w)}`);
+      if (box.h > carton.h) bits.push(`H ${fromMm(box.h)} > ${fromMm(carton.h)}`);
+      return bits.length
+        ? "0 in all 6 rotations. Identity overflow: " + bits.join(", ") + "."
+        : "0 in all 6 rotations.";
+    }
+
+    function renderScene(result) {
+      disposePack();
+      const cartonOk = [state.carton.l, state.carton.w, state.carton.h]
+        .every((n) => Number.isFinite(n) && n > 0);
+      if (!cartonOk) {
+        lastResult = result;
+        return;
+      }
+      const Cx = state.carton.l, Cy = state.carton.w, Cz = state.carton.h;
+      buildCarton(Cx, Cy, Cz);
+      if (result && result.ok && result.count > 0) buildBoxes(result);
+      const key = `${Cx}|${Cy}|${Cz}`;
+      if (key !== lastCartonKey) {
+        frameCarton(Cx, Cy, Cz);
+        lastCartonKey = key;
+        userOrbit = false;
+      }
+      lastResult = result;
+    }
+
+    function updateStats(result) {
+      els.count.classList.remove("zero");
+      els.note.classList.remove("warn");
+      if (!result || !result.ok) {
+        els.count.textContent = "—";
+        els.grid.textContent = "—";
+        els.orient.textContent = "—";
+        els.leftover.textContent = "—";
+        els.fill.textContent = "—";
+        els.note.textContent = "Enter positive sizes for the retail box and the carton inner.";
+        els.note.classList.add("warn");
+        return;
+      }
+      if (result.count === 0) {
+        els.count.textContent = "0";
+        els.count.classList.add("zero");
+        els.grid.textContent = "0 × 0 × 0";
+        els.orient.textContent = fmtTriplet(state.box.l, state.box.w, state.box.h);
+        els.leftover.textContent = fmtTriplet(state.carton.l, state.carton.w, state.carton.h);
+        els.fill.textContent = "0.0%";
+        els.note.textContent = overflowNote(state.box, state.carton);
+        els.note.classList.add("warn");
+        return;
+      }
+      els.count.textContent = String(result.count);
+      els.countUnit.textContent = state.shape === "roll" ? "rolls / carton" : "boxes / carton";
+      els.grid.textContent = `${result.nx} × ${result.ny} × ${result.nz}`;
+      els.orient.textContent = fmtTriplet(result.Bx, result.By, result.Bz);
+      els.leftover.textContent = fmtTriplet(result.leftover[0], result.leftover[1], result.leftover[2]);
+      els.fill.textContent = (result.fill * 100).toFixed(1) + "%";
+      const label = state.name ? state.name + ". " : "";
+      els.note.textContent = `${label}${result.count} boxes, leftover along carton L / W / H.`;
+    }
+
+    function refresh() {
+      const result = packCarton(state.box, state.carton);
+      updateStats(result);
+      renderScene(result);
+      persist();
+      window.__cartonizer = { packCarton, state, lastResult, tests: testFail, loadProductTexture, loadProductFaces, applyGrok, applySavedState, setFrontCamera, capturePng };
+
+    function setFrontCamera() {
+      const Cx = state.carton.l, Cy = state.carton.w, Cz = state.carton.h;
+      if (![Cx, Cy, Cz].every((n) => Number.isFinite(n) && n > 0)) return;
+      userOrbit = true;
+      const cx = Cx / 2, cy = Cz / 2, cz = Cy / 2;
+      controls.target.set(cx, cy, cz);
+      camera.up.set(0, 1, 0);
+      if (state.shape === "roll") {
+        // Window front: wrap facing camera, one column, stacked on H, axis along L.
+        const dist = Math.max(Cx, Cz) * 1.55;
+        camera.position.set(cx, cy, Cy + dist);
+      } else {
+        // Printed face of the front row only (one deep), stacked on H.
+        const dist = Math.max(Cy, Cz) * 1.55;
+        camera.position.set(Cx + dist, cy, cz);
+      }
+      camera.lookAt(cx, cy, cz);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function capturePng() {
+      renderer.render(scene, camera);
+      return renderer.domElement.toDataURL("image/png");
+    }
+    }
+
+    function onEdit() {
+      readInputs();
+      document.querySelectorAll(".chip").forEach((btn) => {
+        btn.setAttribute("aria-pressed", String((btn.dataset.category || "") === (state.category || "")));
+      });
+      refresh();
+    }
+
+    function renderVariants(table) {
+      if (!els.variantsTable) return;
+      if (!table || !table.ok) {
+        els.variantsTable.innerHTML = table && table.reason
+          ? `<tbody><tr><td>${table.reason}</td></tr></tbody>`
+          : "";
+        return;
+      }
+      const rows = table.variants || [];
+      const head = `<thead><tr><th>bags</th><th>Ø</th><th>ΔØ</th><th>carton inner</th><th>vol</th></tr></thead>`;
+      const body = rows.map((r) => {
+        const c = r.carton_inner_mm || {};
+        const cls = r.is_base ? " class=\"base\"" : "";
+        const vol = r.delta_carton_volume_pct == null ? "" : (r.delta_carton_volume_pct > 0 ? "+" : "") + r.delta_carton_volume_pct + "%";
+        return `<tr${cls}><td>${r.bags_per_roll}${r.is_base ? " *" : ""}</td><td>${r.roll.D_mm}</td><td>${r.delta_D_mm}</td><td>${c.l}×${c.w}×${c.h}</td><td>${vol}</td></tr>`;
+      }).join("");
+      els.variantsTable.innerHTML = head + "<tbody>" + body + "</tbody>";
+    }
+
+    async function compareBagCounts() {
+      readInputs();
+      if (state.category !== "trash_bag") return;
+      const counts = (els.compareCounts && els.compareCounts.value) || GROUP_COUNTS[state.group] || "12,15,18,25";
+      try {
+        const res = await fetch("/api/roll-scale", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            counts,
+            n_base: state.pcs_per_pack,
+            title: state.name,
+            state: snapshotState(),
+          }),
+        });
+        const table = await res.json();
+        renderVariants(table);
+      } catch {
+        renderVariants({ ok: false, reason: "Start serve.py to compare bag counts." });
+      }
+    }
+
+    writeInputs();
+    ["name", "boxL", "boxW", "boxH", "cartonL", "cartonW", "cartonH", "pcsPerPack", "filmWidthCm", "filmLengthM", "filmMic", "bagWidthMm", "bagLengthMm"].forEach((id) => {
+      if (els[id]) els[id].addEventListener("input", onEdit);
+    });
+    if (els.group) {
+      els.group.addEventListener("change", () => {
+        readInputs();
+        const g = state.group;
+        if (g === "Ziploc") { state.category = "zip_bag"; state.shape = "box"; }
+        else if (g === "Frischhaltefolie") { state.category = "cling"; state.shape = "roll"; }
+        else if (g) { state.category = "trash_bag"; state.shape = "roll"; }
+        if (els.compareCounts && GROUP_COUNTS[g]) els.compareCounts.value = GROUP_COUNTS[g];
+        writeInputs();
+        onEdit();
+        if (state.category === "trash_bag") compareBagCounts();
+      });
+    }
+    if (els.compareBtn) els.compareBtn.addEventListener("click", compareBagCounts);
+    document.querySelectorAll(".chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.category = btn.dataset.category || "";
+        const chipNames = ["Cling wrap", "Zip bags", "Trash bags", ""];
+        if (!state.name || chipNames.includes(state.name)) {
+          state.name = btn.dataset.name;
+          els.name.value = state.name;
+        }
+        if (state.category === "trash_bag" || state.category === "cling") state.shape = "roll";
+        if (state.category === "zip_bag") state.shape = "box";
+        if (state.category === "zip_bag") state.group = "Ziploc";
+        if (state.category === "cling") state.group = "Frischhaltefolie";
+        writeInputs();
+        onEdit();
+      });
+    });
+    function setUnit(unit) {
+      readInputs();
+      state.unit = unit;
+      writeInputs();
+      refresh();
+    }
+    els.unitMm.addEventListener("click", () => setUnit("mm"));
+    els.unitCm.addEventListener("click", () => setUnit("cm"));
+    function setShape(shape) {
+      state.shape = shape;
+      writeInputs();
+      refresh();
+    }
+    els.shapeBox.addEventListener("click", () => setShape("box"));
+    els.shapeRoll.addEventListener("click", () => setShape("roll"));
+
+    function snapshotState() {
+      readInputs();
+      return {
+        name: state.name,
+        sku: state.sku || "",
+        group: state.group || "",
+        unit: state.unit,
+        shape: state.shape,
+        category: state.category || "",
+        pcs_per_pack: state.pcs_per_pack,
+        film_width_cm: state.film_width_cm,
+        film_length_m: state.film_length_m,
+        film_thickness_mic: state.film_thickness_mic,
+        bag_width_mm: state.bag_width_mm,
+        bag_length_mm: state.bag_length_mm,
+        bag_length_note: state.bag_length_note || "",
+        film_color: state.film_color,
+        rope_color: state.rope_color,
+        printing: state.printing || "",
+        wrap_sheet_gsm: state.wrap_sheet_gsm,
+        wrap_sheet_mm: state.wrap_sheet_mm,
+        box: state.box,
+        carton: state.carton,
+        textureUrl: state.textureUrl || "",
+        textureFront: state.textureFront || "",
+        textureBack: state.textureBack || "",
+        textureSide: state.textureSide || "",
+      };
+    }
+
+    function applySavedState(s) {
+      if (!s) return;
+      state.name = typeof s.name === "string" ? s.name : state.name;
+      state.sku = typeof s.sku === "string" ? s.sku : (state.sku || "");
+      state.group = GROUPS.includes(s.group) ? s.group : (state.group || "");
+      state.unit = s.unit === "cm" ? "cm" : "mm";
+      state.shape = s.shape === "roll" ? "roll" : "box";
+      state.category = ["cling", "zip_bag", "trash_bag"].includes(s.category) ? s.category : (s.category || "");
+      state.pcs_per_pack = s.pcs_per_pack != null && s.pcs_per_pack !== "" ? Number(s.pcs_per_pack) : null;
+      state.film_width_cm = s.film_width_cm != null && s.film_width_cm !== "" ? Number(s.film_width_cm) : null;
+      state.film_length_m = s.film_length_m != null && s.film_length_m !== "" ? Number(s.film_length_m) : null;
+      state.film_thickness_mic = s.film_thickness_mic != null && s.film_thickness_mic !== "" ? Number(s.film_thickness_mic) : null;
+      state.bag_width_mm = s.bag_width_mm != null ? Number(s.bag_width_mm) : null;
+      state.bag_length_mm = s.bag_length_mm != null ? Number(s.bag_length_mm) : null;
+      state.bag_length_note = s.bag_length_note || "";
+      state.film_color = s.film_color || "";
+      state.rope_color = s.rope_color || "";
+      state.printing = s.printing || "";
+      state.wrap_sheet_gsm = s.wrap_sheet_gsm;
+      state.wrap_sheet_mm = s.wrap_sheet_mm;
+      if (s.box) state.box = { l: Number(s.box.l), w: Number(s.box.w), h: Number(s.box.h) };
+      if (s.carton) state.carton = { l: Number(s.carton.l), w: Number(s.carton.w), h: Number(s.carton.h) };
+      state.textureUrl = s.textureUrl || "";
+      state.textureFront = s.textureFront || "";
+      state.textureBack = s.textureBack || "";
+      state.textureSide = s.textureSide || "";
+      productMap = null;
+      productMapBack = null;
+      productMapSide = null;
+      if (els.compareCounts) els.compareCounts.value = GROUP_COUNTS[state.group] || els.compareCounts.value || "12,15,18,25";
+      writeInputs();
+      refresh();
+      if (state.category === "trash_bag") compareBagCounts();
+      if (state.textureFront || state.textureBack || state.textureSide) {
+        loadProductFaces({
+          front: state.textureFront,
+          back: state.textureBack,
+          side: state.textureSide,
+        });
+      } else if (state.textureUrl) {
+        loadProductTexture(state.textureUrl);
+      }
+    }
+
+    async function refreshMockups() {
+      if (!els.mockupList) return;
+      try {
+        const res = await fetch("/api/mockups");
+        const data = await res.json();
+        const rows = data.mockups || [];
+        els.mockupList.innerHTML = "";
+        if (!rows.length) {
+          els.mockupList.innerHTML = '<p class="lede" style="margin:0">None saved yet.</p>';
+          return;
+        }
+        rows.forEach((row) => {
+          const div = document.createElement("div");
+          div.className = "mockup-row";
+          const label = document.createElement("span");
+          label.textContent = [row.group, row.title, row.pcs_per_carton ? row.pcs_per_carton + " pcs" : ""]
+            .filter(Boolean)
+            .join(" · ");
+          const open = document.createElement("button");
+          open.type = "button";
+          open.className = "open";
+          open.textContent = "Open";
+          open.addEventListener("click", async () => {
+            const r = await fetch("/api/mockups/" + row.id);
+            const saved = await r.json();
+            applySavedState(saved.state);
+          });
+          const del = document.createElement("button");
+          del.type = "button";
+          del.textContent = "Delete";
+          del.addEventListener("click", async () => {
+            await fetch("/api/mockups/" + row.id, { method: "DELETE" });
+            refreshMockups();
+          });
+          div.append(label, open, del);
+          els.mockupList.appendChild(div);
+        });
+      } catch {
+        els.mockupList.innerHTML = '<p class="lede" style="margin:0">Start serve.py to save mockups.</p>';
+      }
+    }
+
+    els.saveBtn.addEventListener("click", async () => {
+      readInputs();
+      const title = window.prompt("Mockup name", state.name || "Mockup");
+      if (!title) return;
+      const res = await fetch("/api/mockups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, state: snapshotState() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        window.alert(err.error || "Could not save");
+        return;
+      }
+      refreshMockups();
+    });
+    refreshMockups();
+
+    els.pngBtn.addEventListener("click", () => {
+      renderer.render(scene, camera);
+      const a = document.createElement("a");
+      const n = lastResult && lastResult.ok ? lastResult.count : null;
+      a.download = Number.isFinite(n) ? `cartonizer-${n}pcs.png` : "cartonizer.png";
+      a.href = renderer.domElement.toDataURL("image/png");
+      a.click();
+    });
+
+    let pendingImages = [];
+    let grokBusy = false;
+
+    function addBubble(kind, text, imgs) {
+      const div = document.createElement("div");
+      div.className = "bubble " + kind;
+      if (text) div.textContent = text;
+      const list = Array.isArray(imgs) ? imgs : (imgs ? [imgs] : []);
+      list.forEach((src) => {
+        const im = document.createElement("img");
+        im.src = src;
+        im.alt = "attached";
+        div.appendChild(im);
+      });
+      els.grokLog.appendChild(div);
+      els.grokLog.scrollTop = els.grokLog.scrollHeight;
+      return div;
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => {
+            const max = 1280;
+            let w = img.width, h = img.height;
+            if (Math.max(w, h) > max) {
+              const s = max / Math.max(w, h);
+              w = Math.round(w * s);
+              h = Math.round(h * s);
+            }
+            const c = document.createElement("canvas");
+            c.width = w;
+            c.height = h;
+            c.getContext("2d").drawImage(img, 0, 0, w, h);
+            resolve(c.toDataURL("image/jpeg", 0.86));
+          };
+          img.onerror = reject;
+          img.src = String(reader.result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function applyGrok(payload) {
+      if (payload.shape === "roll" || payload.shape === "box") state.shape = payload.shape;
+      if (payload.name) state.name = payload.name;
+      if (payload.box) state.box = payload.box;
+      if (payload.carton) state.carton = payload.carton;
+      if (payload.textureUrl) {
+        state.textureUrl = payload.textureUrl;
+        loadProductTexture(payload.textureUrl);
+      }
+      writeInputs();
+      refresh();
+    }
+
+    els.attachBtn.addEventListener("click", () => els.attachFile.click());
+    els.attachFile.addEventListener("change", async () => {
+      const files = els.attachFile.files ? [...els.attachFile.files] : [];
+      for (const file of files.slice(0, 4 - pendingImages.length)) {
+        pendingImages.push(await fileToDataUrl(file));
+      }
+      els.attachBtn.textContent = pendingImages.length ? "Photo ×" + pendingImages.length : "Photo";
+    });
+
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((j) => {
+        els.grokStatus.textContent = j.ok ? "Grok Build login" : (j.error || "offline");
+      })
+      .catch(() => {
+        els.grokStatus.textContent = "start serve.py for chat";
+      });
+
+    els.grokForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (grokBusy) return;
+      const text = els.grokText.value.trim();
+      if (!text && !pendingImages.length) return;
+      grokBusy = true;
+      els.grokSend.disabled = true;
+      const sentImages = pendingImages.slice();
+      addBubble("user", text || "(photos)", sentImages);
+      els.grokText.value = "";
+      const think = addBubble("bot think", "Grok is thinking…");
+      els.grokStatus.textContent = "thinking";
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text,
+            images: sentImages,
+            table: {
+              name: state.name,
+              shape: state.shape,
+              box: state.box,
+              carton: state.carton,
+            },
+          }),
+        });
+        const data = await res.json();
+        think.remove();
+        if (!res.ok) {
+          addBubble("bot think", data.error || "Grok request failed.");
+          els.grokStatus.textContent = "error";
+        } else {
+          if (data.thinking) addBubble("bot think", data.thinking);
+          addBubble("bot", data.text || "(no reply)");
+          if (data.apply && (data.box || data.carton || data.shape)) applyGrok(data);
+          else if (data.ask) addBubble("bot think", data.ask);
+          if (data.textureError) addBubble("bot think", "Texture skipped: " + data.textureError);
+          els.grokStatus.textContent = data.texture ? "packed + wrap" : (data.apply ? "packed" : "Grok Build login");
+        }
+      } catch (err) {
+        think.remove();
+        addBubble("bot think", "Chat needs the local server (python3 serve.py). " + err.message);
+        els.grokStatus.textContent = "offline";
+      }
+      pendingImages = [];
+      els.attachBtn.textContent = "Photo";
+      els.attachFile.value = "";
+      grokBusy = false;
+      els.grokSend.disabled = false;
+    });
+
+    function resize() {
+      const w = els.stage.clientWidth || 1;
+      const h = els.stage.clientHeight || 1;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+    }
+    new ResizeObserver(resize).observe(els.stage);
+    resize();
+    if (state.textureUrl) loadProductTexture(state.textureUrl);
+    refresh();
+    if (!userOrbit && lastResult && lastResult.ok) {
+      frameCarton(state.carton.l, state.carton.w, state.carton.h);
+    }
+
+    function tick() {
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(tick);
+    }
+    tick();
+  </script>
+</body>
+</html>

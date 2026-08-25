@@ -1,0 +1,33 @@
+# OS / editor
+.DS_Store
+.superpowers/
+.env
+.env.*
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local auth is never stored in this repo; serve.py reads ~/.grok/auth.json
+
+# Generated local cache (wrap previews, temp images)
+runtime/
+
+# Personal product work — keep locally, do not publish
+mockups/
+examples/
+OKIO-inner-carton-packout.pdf
+*.pdf
+
+# Personal factory catalog, SKUs, quotes, and pack-out reports
+factory/catalog.json
+factory/groups.json
+factory/ROLL-SCALE.json
+factory/EXPORT-LATER.json
+factory/variants/
+factory/quotes/
+factory/report/

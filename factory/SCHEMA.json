@@ -1,0 +1,44 @@
+{
+  "schema": "cartonizer-factory-v1",
+  "purpose": "Stable product pack-out record for a later Chinese factory report. Do not invent millimetres or product claims.",
+  "units": "Always millimetres in saved files, even if the UI showed cm.",
+  "source_of_truth": [
+    "factory/catalog.json",
+    "mockups/<id>/mockup.json → factory"
+  ],
+  "factory_object": {
+    "product": ["title", "name_en", "name_zh", "sku", "group", "category", "pcs_per_pack", "contents", "bag_mm"],
+    "retail_pack": ["shape (box|roll)", "L_mm", "W_mm", "H_mm", "shape_zh"],
+    "shipping_carton": ["inner_L_mm", "inner_W_mm", "inner_H_mm"],
+    "packing": ["pcs_per_carton", "grid_LWH", "packed_as_mm", "leftover_mm", "fill_pct", "layout_en", "layout_zh"],
+    "artwork": ["textureFront", "textureBack", "textureSide", "textureUrl"]
+  },
+  "contents": {
+    "kind": "trash_bag | zip_bag | cling | empty",
+    "pcs_per_pack": "bags per roll (trash) or pieces per box (ziploc). Not used for cling if film size is set.",
+    "film_width_cm": "cling only, e.g. 29",
+    "film_length_m": "cling only, e.g. 20",
+    "label_en": "37 bags / roll | 30 pieces / box | 29 cm × 20 m film",
+    "label_zh": "每卷37只垃圾袋 | 每盒30只 | 保鲜膜 29 cm × 20 m"
+  },
+  "film": {
+    "thickness_mic_one_side": "From factory, e.g. 20 or 25. Not carton wall.",
+    "bag_width_mm": "Open bag width, e.g. 530",
+    "bag_length_mm": "Open bag length including the +50 hem, e.g. 540+50=590",
+    "ignore_from_factory": "Factory carton size, 40 rolls/carton, pallet, container. We use our own carton inner and rolls_per_carton."
+  },
+  "roll_convention": "L = axis length, W = H = diameter.",
+  "box_convention": "L = length, W = depth/thickness, H = height. Dieline flaps are not part of LWH.",
+  "carton_convention": "Inner size only. No flute.",
+  "grid_LWH": "Counts along carton inner L, W, H after the winning axis-aligned orientation.",
+  "groups": ["10L", "25L", "50L", "Ziploc", "Frischhaltefolie"],
+  "roll_scale": {
+    "file": "factory/ROLL-SCALE.json",
+    "formula": "D^2 = D_core^2 + 8 n W L t / (pi * axis)",
+    "V_film": "n * 2 * W * L * t (two walls, t in mm)",
+    "core": "Calibrated from the base SKU (n_base, D_base). Not invented.",
+    "carton": "Keep window grid and leftover slack. Carton L = nx*axis+slack, W = ny*D+slack, H = nz*D+slack.",
+    "default_counts": {"10L": [20, 25, 30, 37], "25L": [12, 15, 18, 25], "50L": [8, 10, 12, 15]},
+    "api": "GET /api/roll-scale?id=<mockup>&counts=12,15,18,25  POST /api/roll-scale {id|state, counts, n_base}"
+  }
+}

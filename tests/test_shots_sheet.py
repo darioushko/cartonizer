@@ -130,6 +130,127 @@ class Sheet(unittest.TestCase):
             serve.sheet_geometry(170, 0, 65)
 
 
+class ProductScope(unittest.TestCase):
+    """Saved views & shots belong to one selected product."""
+
+    def test_1l_view_does_not_match_10l_product(self):
+        self.assertFalse(
+            serve.view_matches_product(
+                {"name": "OKIO 1L Zipbeutel"},
+                {
+                    "productId": "okio-10l-cosmetic-12-pack",
+                    "name": "OKIO 10L",
+                    "sku": "OKIO-10L",
+                },
+            )
+        )
+
+    def test_25l_name_matches_25l_product(self):
+        self.assertTrue(
+            serve.view_matches_product(
+                {"name": "OKIO 25L"},
+                {
+                    "productId": "okio-25l-9-pack-window",
+                    "name": "OKIO 25L",
+                    "sku": "OKIO-25L",
+                },
+            )
+        )
+
+    def test_different_product_ids_do_not_match_even_with_sku(self):
+        self.assertFalse(
+            serve.view_matches_product(
+                {
+                    "productId": "okio-25l-9-pack-window",
+                    "sku": "OKIO-25L",
+                    "name": "OKIO 25L",
+                },
+                {
+                    "productId": "okio-1l-12-pack",
+                    "sku": "OKIO-25L",
+                    "name": "OKIO 1L Zipbeutel",
+                },
+            )
+        )
+
+    def test_same_product_id_matches(self):
+        self.assertTrue(
+            serve.view_matches_product(
+                {"productId": "okio-1l-12-pack", "name": ""},
+                {"productId": "okio-1l-12-pack", "name": "OKIO 1L Zipbeutel"},
+            )
+        )
+
+    def test_empty_view_hidden_when_product_selected(self):
+        self.assertFalse(
+            serve.view_matches_product(
+                {"name": ""},
+                {"productId": "okio-1l-12-pack", "name": "OKIO 1L Zipbeutel"},
+            )
+        )
+
+    def test_no_product_selected_shows_all(self):
+        self.assertTrue(
+            serve.view_matches_product(
+                {"name": "OKIO 1L Zipbeutel"},
+                {"productId": "", "name": "", "sku": ""},
+            )
+        )
+
+    def test_sku_match(self):
+        self.assertTrue(
+            serve.view_matches_product(
+                {"sku": "OKIO-50L", "name": ""},
+                {"productId": "okio-50l-9-pack-window", "sku": "OKIO-50L", "name": "OKIO 50L"},
+            )
+        )
+
+    def test_codex_run_infers_name_from_prompt(self):
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp())
+        old = serve.CODEX_SHOTS_DIR
+        serve.CODEX_SHOTS_DIR = tmp
+        try:
+            folder = tmp / "s123"
+            folder.mkdir()
+            (folder / "closed-front.png").write_bytes(b"\x89PNG")
+            (folder / "closed-front.txt").write_text(
+                "The product is OKIO 1L Zipbeutel, a folded printed carton\n"
+            )
+            runs = serve.list_codex_runs()
+            self.assertEqual(runs[0]["name"], "OKIO 1L Zipbeutel")
+        finally:
+            serve.CODEX_SHOTS_DIR = old
+
+    def test_save_view_stores_product_fields(self):
+        import tempfile
+
+        tmp = Path(tempfile.mkdtemp())
+        old_views = serve.VIEWS_DIR
+        old_codex = serve.CODEX_SHOTS_DIR
+        serve.VIEWS_DIR = tmp
+        serve.CODEX_SHOTS_DIR = tmp / "codex-none"
+        try:
+            rec = serve.save_view(
+                "3d",
+                "3D - Front",
+                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+                name="OKIO 10L",
+                sku="OKIO-10L",
+                product_id="okio-10l-cosmetic-12-pack",
+            )
+            self.assertEqual(rec["productId"], "okio-10l-cosmetic-12-pack")
+            self.assertEqual(rec["sku"], "OKIO-10L")
+            listed = serve.list_views()
+            hit = next(v for v in listed if v["id"] == rec["id"])
+            self.assertEqual(hit["productId"], "okio-10l-cosmetic-12-pack")
+            self.assertEqual(hit["sku"], "OKIO-10L")
+        finally:
+            serve.VIEWS_DIR = old_views
+            serve.CODEX_SHOTS_DIR = old_codex
+
+
 class CodexParse(unittest.TestCase):
     def test_sse_image_generation_call(self):
         raw = (

@@ -619,6 +619,12 @@
       font-size: 11px;
       color: var(--mute);
     }
+    .library-empty {
+      grid-column: 1 / -1;
+      margin: 4px 0 2px;
+      color: var(--mute);
+      font-size: 13px;
+    }
     .view-add {
       min-height: 118px;
       display: grid;
@@ -988,6 +994,7 @@
     const DEFAULT_STATE = {
       name: "",
       sku: "",
+      productId: "",
       group: "",
       unit: "mm",
       shape: "box",
@@ -1135,6 +1142,7 @@
         return {
           name: typeof s.name === "string" ? s.name : "",
           sku: typeof s.sku === "string" ? s.sku : "",
+          productId: typeof s.productId === "string" ? s.productId : "",
           group: GROUPS.includes(s.group) ? s.group : "",
           unit: s.unit === "cm" ? "cm" : "mm",
           shape: s.shape === "roll" ? "roll" : "box",
@@ -1260,6 +1268,7 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         name: state.name,
         sku: state.sku || "",
+        productId: state.productId || "",
         group: state.group || "",
         unit: state.unit,
         shape: state.shape,
@@ -1488,6 +1497,9 @@
     let lastCartonKey = "";
     let lastResult = null;
     let shotsBusy = false;
+    let allViews = [];
+    let viewKind = "";
+    let viewQuery = "";
     let userOrbit = false;
     let activeViewId = "front-right";
     const VIEW_PRESETS = [
@@ -1763,6 +1775,7 @@
         btn.setAttribute("aria-pressed", String((btn.dataset.category || "") === (state.category || "")));
       });
       refresh();
+      renderLibrary();
     }
 
     function renderVariants(table) {
@@ -1861,6 +1874,7 @@
       return {
         name: state.name,
         sku: state.sku || "",
+        productId: (els.productSelect && els.productSelect.value) || state.productId || "",
         group: state.group || "",
         unit: state.unit,
         shape: state.shape,
@@ -1889,7 +1903,8 @@
     function applySavedState(s) {
       if (!s) return;
       state.name = typeof s.name === "string" ? s.name : state.name;
-      state.sku = typeof s.sku === "string" ? s.sku : (state.sku || "");
+      state.sku = typeof s.sku === "string" ? s.sku : "";
+      state.productId = typeof s.productId === "string" ? s.productId : (state.productId || "");
       state.group = GROUPS.includes(s.group) ? s.group : (state.group || "");
       state.unit = s.unit === "cm" ? "cm" : "mm";
       state.shape = s.shape === "roll" ? "roll" : "box";
@@ -1928,6 +1943,11 @@
       } else if (state.textureUrl) {
         loadProductTexture(state.textureUrl);
       }
+      if (els.productSelect && state.productId) {
+        const opts = [...els.productSelect.options];
+        if (opts.some((o) => o.value === state.productId)) els.productSelect.value = state.productId;
+      }
+      renderLibrary();
     }
 
     async function refreshMockups() {
@@ -1946,8 +1966,11 @@
             opt.textContent = row.title || row.id;
             els.productSelect.appendChild(opt);
           });
-          if ([...els.productSelect.options].some((o) => o.value === cur)) els.productSelect.value = cur;
+          const want = state.productId || cur;
+          if ([...els.productSelect.options].some((o) => o.value === want)) els.productSelect.value = want;
+          if (els.productSelect.value) state.productId = els.productSelect.value;
         }
+        renderLibrary();
         if (!rows.length) {
           els.mockupList.innerHTML = '<p class="lede" style="margin:0">None saved yet.</p>';
           return;
@@ -1966,7 +1989,9 @@
           open.addEventListener("click", async () => {
             const r = await fetch("/api/mockups/" + row.id);
             const saved = await r.json();
-            applySavedState(saved.state);
+            state.productId = row.id;
+            if (els.productSelect) els.productSelect.value = row.id;
+            applySavedState({ ...(saved.state || {}), productId: row.id });
           });
           const del = document.createElement("button");
           del.type = "button";
@@ -1986,11 +2011,15 @@
     if (els.productSelect) {
       els.productSelect.addEventListener("change", async () => {
         const id = els.productSelect.value;
-        if (!id) return;
+        state.productId = id;
+        if (!id) {
+          renderLibrary();
+          return;
+        }
         const r = await fetch("/api/mockups/" + id);
         if (!r.ok) return;
         const saved = await r.json();
-        applySavedState(saved.state);
+        applySavedState({ ...(saved.state || {}), productId: id });
       });
     }
 
@@ -2174,10 +2203,6 @@
     let pendingImages = [];
     let grokBusy = false;
 
-    let allViews = [];
-    let viewKind = "";
-    let viewQuery = "";
-
     function setDock(mode) {
       const chat = mode === "chat";
       if (els.library) els.library.hidden = chat;
@@ -2205,21 +2230,79 @@
       return dz >= 0 ? "3D - Front" : "3D - Back";
     }
 
+    function currentProduct() {
+      return {
+        productId: (els.productSelect && els.productSelect.value) || state.productId || "",
+        sku: state.sku || "",
+        name: state.name || "",
+      };
+    }
+
+    function normLabel(s) {
+      return String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    }
+
+    function sizeToken(s) {
+      const m = String(s || "").match(/(?<!\d)(\d+)\s*l\b/i);
+      return m ? m[1] : "";
+    }
+
+    function viewMatchesProduct(view, product) {
+      const pid = product.productId || "";
+      const sku = product.sku || "";
+      const name = product.name || "";
+      if (!pid && !sku && !name) return true;
+      if (pid && view.productId) return String(view.productId).toLowerCase() === pid.toLowerCase();
+      if (sku && view.sku && String(view.sku).toLowerCase() === sku.toLowerCase()) return true;
+      const vn = normLabel(view.name);
+      const pn = normLabel(name);
+      if (vn && pn && vn === pn) return true;
+      const vs = sizeToken([vn, view.productId, view.sku].filter(Boolean).join(" "));
+      const ps = sizeToken([pn, pid, sku].filter(Boolean).join(" "));
+      if (vs && ps && vs !== ps) return false;
+      if (vn && pn && vs && ps && vs === ps && vn.split(" ")[0] === pn.split(" ")[0]) return true;
+      return false;
+    }
+
+    {
+      const ten = { productId: "okio-10l-cosmetic-12-pack", name: "OKIO 10L", sku: "OKIO-10L" };
+      const fail = [];
+      if (viewMatchesProduct({ name: "OKIO 1L Zipbeutel" }, ten)) fail.push("1L vs 10L");
+      if (!viewMatchesProduct({ name: "OKIO 10L" }, ten)) fail.push("10L name");
+      if (!viewMatchesProduct({ productId: ten.productId, name: "" }, ten)) fail.push("id");
+      if (viewMatchesProduct({ name: "" }, ten)) fail.push("empty vs 10L");
+      if (viewMatchesProduct(
+        { productId: "okio-25l-9-pack-window", sku: "OKIO-25L", name: "OKIO 25L" },
+        { productId: "okio-1l-12-pack", sku: "OKIO-25L", name: "OKIO 1L Zipbeutel" }
+      )) fail.push("id mismatch vs leftover sku");
+      if (fail.length) console.error("library product filter tests failed:", fail);
+    }
+
     function renderLibrary() {
       if (!els.libraryGrid) return;
+      const product = currentProduct();
+      const mine = allViews.filter((v) => viewMatchesProduct(v, product));
       const q = viewQuery.trim().toLowerCase();
-      const rows = allViews.filter((v) => {
+      const rows = mine.filter((v) => {
         if (viewKind && v.kind !== viewKind) return false;
         if (!q) return true;
-        return ((v.title || "") + " " + (v.name || "")).toLowerCase().includes(q);
+        return ((v.title || "") + " " + (v.name || "") + " " + (v.sku || "")).toLowerCase().includes(q);
       });
       const set = (id, n) => { const el = $(id); if (el) el.textContent = String(n); };
-      set("countAll", allViews.length);
-      set("count3d", allViews.filter((v) => v.kind === "3d").length);
-      set("count2d", allViews.filter((v) => v.kind === "2d").length);
-      set("countCodex", allViews.filter((v) => v.kind === "codex").length);
-      set("countVer", allViews.filter((v) => v.kind === "verification").length);
+      set("countAll", mine.length);
+      set("count3d", mine.filter((v) => v.kind === "3d").length);
+      set("count2d", mine.filter((v) => v.kind === "2d").length);
+      set("countCodex", mine.filter((v) => v.kind === "codex").length);
+      set("countVer", mine.filter((v) => v.kind === "verification").length);
       els.libraryGrid.innerHTML = "";
+      if (!rows.length) {
+        const empty = document.createElement("p");
+        empty.className = "library-empty";
+        empty.textContent = (product.productId || product.name)
+          ? "No shots for this product yet. Capture 3D views or run Codex shots."
+          : "No shots yet. Capture 3D views or run Codex shots.";
+        els.libraryGrid.appendChild(empty);
+      }
       rows.forEach((v) => {
         const a = document.createElement("a");
         a.className = "view-card";
@@ -2285,7 +2368,14 @@
       const res = await fetch("/api/views", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, title, dataUrl, name: state.name || "" }),
+        body: JSON.stringify({
+          kind,
+          title,
+          dataUrl,
+          name: state.name || "",
+          sku: state.sku || "",
+          productId: currentProduct().productId || "",
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

@@ -1,16 +1,18 @@
 # Cartonizer
 
-Local packing-table tool for household retail packs (cling wrap, zip bags, trash-bag rolls, and similar).
+Python packing table in the browser. You enter a retail pack in millimetres and a shipping carton inner size. The script tries all six axis-aligned orientations and keeps the densest regular grid: piece count, leftover millimetres, fill percent.
 
-It does two jobs:
+`index.html` draws that pack in Three.js. Camera presets (front, left, top, top-open) sit on the carton axes, so 3D stills and image-model layout refs hit the same faces.
 
-1. **Packaging preview.** From photos, a dieline, or typed sizes, the local Python server asks an image model for wrap/front/back/side artwork so you can see a printed carton before anything is produced.
-2. **Industrial carton math.** You enter the retail pack size and the shipping carton inner size. The tool tries all six axis-aligned orientations, picks the densest regular grid, and shows how many units fit, leftover millimetres, and fill percent. Change bag count, film, or carton size to compare configurations.
+If you load front, back, and side print, Codex shots (GPT Image through `codex login`) can render the carton closed, as an open shipper, side-open, or on a shelf. Skip the print and it invents the artwork. I would not hit that button until the print is on the table.
 
-The published repo is the **plain tool**: app + schema, without any samples. 
+Saved views & shots is the gallery. It follows the Product dropdown, so SKUs do not dump into one pile.
 
-<img width="397" height="455" alt="image" src="https://github.com/user-attachments/assets/951ad0f0-8e74-40ed-84ac-cfcd7faa0629" />
+Export sheet downloads a reverse-tuck SVG of the retail box from the millimetres. No model, no login. Shape has to be Box.
 
+The GitHub copy is the empty tool. Mockups, wraps, quotes, and generated files stay on your machine.
+
+<img src="docs/screenshots/app.png" alt="Cartonizer packing table with 3D grid and shot library" width="900" />
 
 ## Run
 
@@ -18,26 +20,39 @@ The published repo is the **plain tool**: app + schema, without any samples.
 python3 serve.py
 ```
 
-Then open [http://127.0.0.1:8765/](http://127.0.0.1:8765/).
+Open [http://127.0.0.1:8765/](http://127.0.0.1:8765/).
 
-<img width="768" height="1024" alt="image" src="https://github.com/user-attachments/assets/3e4d8c0b-4e56-43d9-9120-d41a86724a9c" />
+Grok chat needs `grok login`. Codex shots need `codex login`. Auth lives in `~/.grok/auth.json` and `~/.codex/auth.json`, not in this repo.
 
-Wrap chat needs a Grok Build login (`grok login`). **Codex shots** needs `codex login` and copies the loaded front/back/side print onto the photos (attach a dieline only if no faces are loaded). Auth stays in `~/.grok/auth.json` and `~/.codex/auth.json` on your machine, not in this repo.
+The 3D pack-out also opens as a static file if you just want the math view.
 
-**Export sheet** downloads an SVG reverse-tuck dieline of the retail box from the millimetres on the table. No login. Shape must be Box.
+## Workflow
 
-The 3D pack-out view in `index.html` also works as a static file without the server.
+Put millimetres on the table. The 3D view is the pack-out.
+
+Capture 3D views if you want stills of that model, or a layout frame for Codex.
+
+<img src="docs/screenshots/3d-view.png" alt="3D pack-out with print mapped on the units" width="520" />
+
+The Codex button copies the loaded print onto photoreal carton photos. Same print, different cameras.
+
+<img src="docs/screenshots/codex-closed.png" alt="Example Codex closed carton" width="640" />
+<img src="docs/screenshots/codex-open.png" alt="Example Codex open shipping carton" width="640" />
+
+Those two are sample GPT Image output. The print files are not in the repo.
+
+The library only shows shots for the selected product. Chat sits behind the header icon and replaces the library when you open it.
 
 ## What is public vs local
 
 | Public | Stays on your machine (gitignored) |
 |---|---|
-| `serve.py` | `mockups/` saved designs and generated wraps |
-| `index.html` | `examples/` reference photos |
-| `factory/SCHEMA.json` | `factory/catalog.json`, `groups.json`, `variants/`, `quotes/`, `report/` |
-| this README | `runtime/` cache |
+| `serve.py`, `index.html` | `mockups/` saved designs and wraps |
+| `factory/SCHEMA.json` | `factory/catalog.json`, quotes, variants |
+| `docs/screenshots/` | `runtime/` generated shots and 3D captures |
+| this README | `examples/` |
 
-Saving a mockup in the UI writes into those local folders automatically.
+Saving a mockup in the UI writes into those local folders.
 
 ## Packing rule
 

@@ -728,6 +728,55 @@ def generate_codex_image(prompt: str, aspect: str = "1:1", images: list | None =
         raise RuntimeError("Codex image was not valid base64.") from e
 
 
+SIZE_L_RE = re.compile(r"(?<!\d)(\d+)\s*l\b", re.I)
+
+
+def product_fields(obj: dict | None = None, **extra) -> dict:
+    st = obj if isinstance(obj, dict) else {}
+    pid = str(
+        extra.get("productId")
+        or extra.get("product_id")
+        or st.get("productId")
+        or st.get("product_id")
+        or ""
+    ).strip()[:80]
+    sku = str(extra.get("sku") or st.get("sku") or "").strip()[:80]
+    name = str(extra.get("name") or st.get("name") or "").strip()[:80]
+    return {"productId": pid, "sku": sku, "name": name}
+
+
+def _norm_label(s: str) -> str:
+    return " ".join((s or "").strip().lower().split())
+
+
+def _size_l(s: str) -> str:
+    m = SIZE_L_RE.search(s or "")
+    return m.group(1) if m else ""
+
+
+def view_matches_product(view: dict, product: dict) -> bool:
+    """True if a saved view/shot belongs to the currently selected product."""
+    vf = product_fields(view)
+    pf = product_fields(product)
+    if not (pf["productId"] or pf["sku"] or pf["name"]):
+        return True
+    if vf["productId"] and pf["productId"]:
+        return vf["productId"].lower() == pf["productId"].lower()
+    if vf["sku"] and pf["sku"] and vf["sku"].lower() == pf["sku"].lower():
+        return True
+    vn = _norm_label(vf["name"])
+    pn = _norm_label(pf["name"])
+    if vn and pn and vn == pn:
+        return True
+    vs = _size_l(" ".join(filter(None, [vn, vf["productId"], vf["sku"]])))
+    ps = _size_l(" ".join(filter(None, [pn, pf["productId"], pf["sku"]])))
+    if vs and ps and vs != ps:
+        return False
+    if vn and pn and vs and ps and vs == ps and vn.split()[0] == pn.split()[0]:
+        return True
+    return False
+
+
 def save_codex_shot(
     shot_id: str,
     state: dict,
@@ -753,12 +802,14 @@ def save_codex_shot(
     (folder / f"{shot_id}.txt").write_text(prompt + "\n", encoding="utf-8")
     url = "/runtime/codex-shots/" + run + "/" + dest.name
     meta_path = folder / "run.json"
-    meta = {"run": run, "name": str(state.get("name") or ""), "shots": []}
+    fields = product_fields(state)
+    meta = {"run": run, **fields, "shots": []}
     if meta_path.is_file():
         try:
             prev = json.loads(meta_path.read_text())
             if isinstance(prev, dict):
-                meta = {**meta, **prev, "name": str(state.get("name") or prev.get("name") or "")}
+                keep = {k: fields[k] or str(prev.get(k) or "") for k in ("productId", "sku", "name")}
+                meta = {**meta, **prev, **keep}
         except json.JSONDecodeError:
             pass
     shots = [s for s in (meta.get("shots") or []) if isinstance(s, dict) and s.get("id") != shot_id]
@@ -796,18 +847,39 @@ def list_codex_runs() -> list[dict]:
                 )
         if not shots:
             continue
-        name = ""
+        fields = {"name": "", "sku": "", "productId": ""}
         meta_path = folder / "run.json"
         if meta_path.is_file():
             try:
-                name = str(json.loads(meta_path.read_text()).get("name") or "")
+                raw = json.loads(meta_path.read_text())
+                if isinstance(raw, dict):
+                    fields = product_fields(raw)
             except json.JSONDecodeError:
                 pass
-        runs.append({"run": folder.name, "name": name, "shots": shots})
+        if not fields["name"]:
+            for spec in SHOTS:
+                txt = folder / f"{spec['id']}.txt"
+                if not txt.is_file():
+                    continue
+                m = re.search(
+                    r"The product is ([^,]+), a ",
+                    txt.read_text(encoding="utf-8", errors="ignore"),
+                )
+                if m:
+                    fields["name"] = m.group(1).strip()[:80]
+                    break
+        runs.append({"run": folder.name, **fields, "shots": shots})
     return runs[:40]
 
 
-def save_view(kind: str, title: str, data_url: str, name: str = "") -> dict:
+def save_view(
+    kind: str,
+    title: str,
+    data_url: str,
+    name: str = "",
+    sku: str = "",
+    product_id: str = "",
+) -> dict:
     kind = kind if kind in ("3d", "2d", "codex", "verification") else "3d"
     url = (data_url or "").strip()
     if not url.startswith("data:image"):
@@ -820,11 +892,12 @@ def save_view(kind: str, title: str, data_url: str, name: str = "") -> dict:
     VIEWS_DIR.mkdir(parents=True, exist_ok=True)
     ext = ".jpg" if "jpeg" in header.lower() else ".png"
     (VIEWS_DIR / (vid + ext)).write_bytes(raw)
+    fields = product_fields({"name": name, "sku": sku, "productId": product_id})
     rec = {
         "id": vid,
         "kind": kind,
         "title": (title or ("3D view" if kind == "3d" else kind))[:80],
-        "name": (name or "")[:80],
+        **fields,
         "url": "/runtime/views/" + vid + ext,
         "createdAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
@@ -846,9 +919,13 @@ def list_views() -> list[dict]:
             rec["mtime"] = meta.stat().st_mtime
             rec.setdefault("kind", "3d")
             rec.setdefault("title", rec.get("id") or "view")
+            rec.setdefault("productId", "")
+            rec.setdefault("sku", "")
+            rec.setdefault("name", "")
             items.append(rec)
     for run in list_codex_runs():
         folder = CODEX_SHOTS_DIR / run["run"]
+        fields = product_fields(run)
         for shot in run["shots"]:
             png = folder / f"{shot['id']}.png"
             items.append(
@@ -856,7 +933,7 @@ def list_views() -> list[dict]:
                     "id": run["run"] + "-" + shot["id"],
                     "kind": "codex",
                     "title": shot["title"],
-                    "name": run.get("name") or "",
+                    **fields,
                     "url": shot["url"],
                     "mtime": png.stat().st_mtime if png.is_file() else 0,
                 }
@@ -1522,6 +1599,8 @@ class Handler(SimpleHTTPRequestHandler):
                     str(body.get("title") or ""),
                     str(body.get("dataUrl") or ""),
                     str(body.get("name") or ""),
+                    str(body.get("sku") or ""),
+                    str(body.get("productId") or ""),
                 )
             except ValueError as e:
                 self._json(400, {"error": str(e)})

@@ -20,6 +20,9 @@ python3 serve.py
 
 Then open [http://127.0.0.1:8765/](http://127.0.0.1:8765/).
 
+<img width="768" height="1024" alt="image" src="https://github.com/user-attachments/assets/3e4d8c0b-4e56-43d9-9120-d41a86724a9c" />
+
+
 Image preview needs a Grok Build login (`grok login`). Auth lives in `~/.grok/auth.json` on your machine and is not part of this repo. The 3D pack-out view in `index.html` also works as a static file without the server.
 
 ## What is public vs local

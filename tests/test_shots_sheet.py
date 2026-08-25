@@ -74,6 +74,15 @@ class Shots(unittest.TestCase):
         roles = [r["role"] for r in serve.plan_shot_refs(state, extras)]
         self.assertEqual(roles, ["front", "back", "side"])
 
+    def test_layout_appended_to_faces(self):
+        state = {
+            "textureFront": "/mockups/a/front.jpg",
+            "textureBack": "/mockups/a/back.jpg",
+            "textureSide": "/mockups/a/side.jpg",
+        }
+        roles = [r["role"] for r in serve.plan_shot_refs(state, layouts=["data:image/png;base64,aa"])]
+        self.assertEqual(roles, ["front", "back", "side", "layout"])
+
     def test_dieline_only_when_no_faces(self):
         roles = [r["role"] for r in serve.plan_shot_refs({}, ["data:image/jpeg;base64,yy"])]
         self.assertEqual(roles, ["dieline"])

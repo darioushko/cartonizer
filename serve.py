@@ -347,28 +347,38 @@ ROLE_LOCK = {
         "the unfolded carton net (dieline). Mentally fold it into a 3D carton. "
         "Do not show it flat. The tall printed face with the product photo is the front."
     ),
+    "layout": (
+        "a 3D pack from Cartonizer. Match this camera, this grid, and this unit count. "
+        "Do not add or remove packs."
+    ),
 }
 
 
-def plan_shot_refs(state: dict, extras: list | None = None) -> list[dict]:
-    """Faces beat wrap beat dieline. Never mix a dieline with already-folded faces."""
+def plan_shot_refs(state: dict, extras: list | None = None, layouts: list | None = None) -> list[dict]:
+    """Faces beat wrap beat dieline. A 3D layout ref may ride along with faces."""
     faces = []
     for role, key in REF_FACE_KEYS:
         url = str((state or {}).get(key) or "").strip()
         if url:
             faces.append({"role": role, "url": url})
     if faces:
-        return faces[:3]
-    wrap = str((state or {}).get("textureUrl") or "").strip()
-    if wrap:
-        return [{"role": "wrap", "url": wrap}]
-    out = []
-    for u in extras or []:
-        if not isinstance(u, str):
-            continue
-        if u.startswith("data:image") or u.startswith("/mockups/") or u.startswith("/runtime/"):
-            out.append({"role": "dieline", "url": u})
-        if len(out) >= 1:
+        out = faces[:3]
+    else:
+        wrap = str((state or {}).get("textureUrl") or "").strip()
+        if wrap:
+            out = [{"role": "wrap", "url": wrap}]
+        else:
+            out = []
+            for u in extras or []:
+                if not isinstance(u, str):
+                    continue
+                if u.startswith("data:image") or u.startswith("/mockups/") or u.startswith("/runtime/"):
+                    out.append({"role": "dieline", "url": u})
+                if len(out) >= 1:
+                    break
+    for u in layouts or []:
+        if isinstance(u, str) and u.startswith("data:image"):
+            out.append({"role": "layout", "url": u})
             break
     return out
 
@@ -402,9 +412,9 @@ def resolve_ref_data(url: str) -> str | None:
     return None
 
 
-def load_shot_refs(state: dict, extras: list | None = None) -> list[dict]:
+def load_shot_refs(state: dict, extras: list | None = None, layouts: list | None = None) -> list[dict]:
     loaded = []
-    for item in plan_shot_refs(state, extras):
+    for item in plan_shot_refs(state, extras, layouts):
         data = resolve_ref_data(item["url"])
         if data:
             loaded.append({"role": item["role"], "data": data})
@@ -717,7 +727,13 @@ def generate_codex_image(prompt: str, aspect: str = "1:1", images: list | None =
         raise RuntimeError("Codex image was not valid base64.") from e
 
 
-def save_codex_shot(shot_id: str, state: dict, run: str, extras: list | None = None) -> dict:
+def save_codex_shot(
+    shot_id: str,
+    state: dict,
+    run: str,
+    extras: list | None = None,
+    layouts: list | None = None,
+) -> dict:
     spec = shot_by_id(shot_id)
     if not spec:
         raise ValueError(f"unknown shot {shot_id}")
@@ -726,7 +742,7 @@ def save_codex_shot(shot_id: str, state: dict, run: str, extras: list | None = N
     box = mm_triple(state.get("box"))
     if not box:
         raise ValueError("need positive retail box L, W, H")
-    refs = load_shot_refs(state, extras)
+    refs = load_shot_refs(state, extras, layouts)
     prompt = shot_prompt(shot_id, state, refs)
     png = generate_codex_image(prompt, spec["aspect"], [r["data"] for r in refs])
     folder = CODEX_SHOTS_DIR / run
@@ -1521,8 +1537,9 @@ class Handler(SimpleHTTPRequestHandler):
             run = str(body.get("run") or f"s{int(time.time())}")
             state = body.get("state") if isinstance(body.get("state"), dict) else {}
             extras = body.get("images") if isinstance(body.get("images"), list) else []
+            layouts = body.get("layouts") if isinstance(body.get("layouts"), list) else []
             try:
-                saved = save_codex_shot(shot_id, state, extras=extras, run=run)
+                saved = save_codex_shot(shot_id, state, extras=extras, layouts=layouts, run=run)
             except ValueError as e:
                 self._json(400, {"error": str(e)})
                 return

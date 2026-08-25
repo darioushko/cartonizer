@@ -340,6 +340,15 @@
       height: 32px;
       background: var(--card);
     }
+    #viewPreset {
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--card);
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
     .hint {
       position: absolute;
       left: 0;
@@ -879,15 +888,16 @@
           <button type="button" id="view2d" aria-pressed="false">2D</button>
         </div>
         <div class="tool-cluster">
-          <button type="button" class="icon-btn" id="resetCamBtn" title="Reset camera" aria-label="Reset camera">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-          </button>
-          <button type="button" class="icon-btn" id="frontCamBtn" title="Front view" aria-label="Front view">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l9-5 9 5v8l-9 5-9-5V8z"/><path d="M12 3v18"/></svg>
-          </button>
-          <button type="button" class="icon-btn" id="isoCamBtn" title="Iso view" aria-label="Iso view">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8v8H8z"/></svg>
-          </button>
+          <select id="viewPreset" aria-label="Camera view" title="Camera view">
+            <option value="front-right">3D - Front Right</option>
+            <option value="front-left">3D - Front Left</option>
+            <option value="front">3D - Front</option>
+            <option value="back">3D - Back</option>
+            <option value="left">3D - Left</option>
+            <option value="right">3D - Right</option>
+            <option value="top">3D - Top</option>
+            <option value="top-open">3D - Top Open</option>
+          </select>
         </div>
       </div>
       <div id="sheetPreview" hidden></div>
@@ -901,6 +911,7 @@
           <div class="library-tools">
             <input id="shotSearch" type="search" placeholder="Search shots…" />
             <button type="button" class="ghost" id="selectShotsBtn">Select</button>
+            <button type="button" class="ghost" id="captureSetBtn">Capture 3D views</button>
             <button type="button" id="addShotBtn">+ Add shot</button>
           </div>
         </div>
@@ -1055,9 +1066,8 @@
       view2d: $("view2d"),
       sheetPreview: $("sheetPreview"),
       optimalBadge: $("optimalBadge"),
-      resetCamBtn: $("resetCamBtn"),
-      frontCamBtn: $("frontCamBtn"),
-      isoCamBtn: $("isoCamBtn"),
+      viewPreset: $("viewPreset"),
+      captureSetBtn: $("captureSetBtn"),
       helpBtn: $("helpBtn"),
       shareBtn: $("shareBtn"),
       themeBtn: $("themeBtn"),
@@ -1435,7 +1445,60 @@
     let lastResult = null;
     let shotsBusy = false;
     let userOrbit = false;
+    let activeViewId = "front-right";
+    const VIEW_PRESETS = [
+      { id: "front", title: "3D - Front", place: (c, d) => ({ x: c.x, y: c.y, z: c.z + d }) },
+      { id: "back", title: "3D - Back", place: (c, d) => ({ x: c.x, y: c.y, z: c.z - d }) },
+      { id: "left", title: "3D - Left", place: (c, d) => ({ x: c.x - d, y: c.y, z: c.z }) },
+      { id: "right", title: "3D - Right", place: (c, d) => ({ x: c.x + d, y: c.y, z: c.z }) },
+      { id: "front-right", title: "3D - Front Right", place: (c, d) => ({ x: c.x + d * 0.85, y: c.y + d * 0.32, z: c.z + d * 0.85 }) },
+      { id: "front-left", title: "3D - Front Left", place: (c, d) => ({ x: c.x - d * 0.85, y: c.y + d * 0.32, z: c.z + d * 0.85 }) },
+      { id: "top", title: "3D - Top", place: (c, d) => ({ x: c.x, y: c.y + d, z: c.z + d * 0.05 }) },
+      { id: "top-open", title: "3D - Top Open", place: (c, d) => ({ x: c.x + d * 0.18, y: c.y + d * 0.92, z: c.z + d * 0.42 }) },
+    ];
+    const SHOT_VIEW = {
+      "closed-34": "front-right",
+      "closed-front": "front",
+      "open-front-tray": "left",
+      "open-carton": "top-open",
+      "shelf": "front-right",
+    };
     controls.addEventListener("start", () => { userOrbit = true; });
+
+    function applyViewPreset(id) {
+      const spec = VIEW_PRESETS.find((v) => v.id === id);
+      const Cx = state.carton.l, Cy = state.carton.w, Cz = state.carton.h;
+      if (!spec || ![Cx, Cy, Cz].every((n) => Number.isFinite(n) && n > 0)) return false;
+      if (typeof setViewMode === "function") setViewMode("3d");
+      const c = { x: Cx / 2, y: Cz / 2, z: Cy / 2 };
+      const d = Math.max(Cx, Cy, Cz, 1) * 1.65;
+      const p = spec.place(c, d);
+      activeViewId = id;
+      userOrbit = true;
+      camera.up.set(0, 1, 0);
+      controls.target.set(c.x, c.y, c.z);
+      camera.position.set(p.x, p.y, p.z);
+      camera.near = Math.max(0.1, Math.max(Cx, Cy, Cz) / 200);
+      camera.far = Math.max(Cx, Cy, Cz) * 40;
+      camera.updateProjectionMatrix();
+      camera.lookAt(c.x, c.y, c.z);
+      controls.update();
+      renderer.render(scene, camera);
+      if (els.viewPreset) els.viewPreset.value = id;
+      return true;
+    }
+
+    function waitFrames(n) {
+      return new Promise((resolve) => {
+        const step = () => { n -= 1; if (n <= 0) resolve(); else requestAnimationFrame(step); };
+        requestAnimationFrame(step);
+      });
+    }
+
+    async function captureViewFrame() {
+      renderer.render(scene, camera);
+      return renderer.domElement.toDataURL("image/jpeg", 0.78);
+    }
 
     function disposePack() {
       packGroup.traverse((obj) => {
@@ -1445,19 +1508,7 @@
     }
 
     function frameCarton(Cx, Cy, Cz) {
-      const foot = Math.max(Cx, Cy, 1);
-      const cx = Cx / 2, cy = Cz / 2, cz = Cy / 2;
-      controls.target.set(cx, cy * 0.5, cz);
-      if (Cz > foot * 1.25) {
-        camera.position.set(cx + foot * 1.6, cy * 0.55, cz + foot * 2.4);
-      } else {
-        const size = Math.max(Cx, Cy, Cz, 1);
-        camera.position.set(cx + size * 1.45, cy + size * 0.68, cz + size * 1.6);
-      }
-      camera.near = Math.max(0.1, Math.max(Cx, Cy, Cz) / 200);
-      camera.far = Math.max(Cx, Cy, Cz) * 40;
-      camera.updateProjectionMatrix();
-      controls.update();
+      applyViewPreset(activeViewId || "front-right");
     }
 
     function buildCarton(Cx, Cy, Cz) {
@@ -1639,27 +1690,10 @@
       const boxOk = [state.box.l, state.box.w, state.box.h].every((n) => Number.isFinite(n) && n > 0);
       els.sheetBtn.disabled = state.shape !== "box" || !boxOk;
       els.codexBtn.disabled = shotsBusy || !boxOk;
-      window.__cartonizer = { packCarton, state, lastResult, tests: testFail, loadProductTexture, loadProductFaces, applyGrok, applySavedState, setFrontCamera, capturePng };
+      window.__cartonizer = { packCarton, state, lastResult, tests: testFail, loadProductTexture, loadProductFaces, applyGrok, applySavedState, setFrontCamera, capturePng, applyViewPreset };
 
     function setFrontCamera() {
-      const Cx = state.carton.l, Cy = state.carton.w, Cz = state.carton.h;
-      if (![Cx, Cy, Cz].every((n) => Number.isFinite(n) && n > 0)) return;
-      userOrbit = true;
-      const cx = Cx / 2, cy = Cz / 2, cz = Cy / 2;
-      controls.target.set(cx, cy, cz);
-      camera.up.set(0, 1, 0);
-      if (state.shape === "roll") {
-        // Window front: wrap facing camera, one column, stacked on H, axis along L.
-        const dist = Math.max(Cx, Cz) * 1.55;
-        camera.position.set(cx, cy, Cy + dist);
-      } else {
-        // Printed face of the front row only (one deep), stacked on H.
-        const dist = Math.max(Cy, Cz) * 1.55;
-        camera.position.set(Cx + dist, cy, cz);
-      }
-      camera.lookAt(cx, cy, cz);
-      controls.update();
-      renderer.render(scene, camera);
+      applyViewPreset("front");
     }
 
     function capturePng() {
@@ -1925,18 +1959,10 @@
     }
     if (els.view3d) els.view3d.addEventListener("click", () => setViewMode("3d"));
     if (els.view2d) els.view2d.addEventListener("click", () => setViewMode("2d"));
-    if (els.resetCamBtn) els.resetCamBtn.addEventListener("click", () => {
-      lastCartonKey = "";
-      refresh();
+    if (els.viewPreset) els.viewPreset.addEventListener("change", () => {
+      applyViewPreset(els.viewPreset.value);
     });
-    if (els.frontCamBtn) els.frontCamBtn.addEventListener("click", () => {
-      if (window.__cartonizer && window.__cartonizer.setFrontCamera) window.__cartonizer.setFrontCamera();
-    });
-    if (els.isoCamBtn) els.isoCamBtn.addEventListener("click", () => {
-      lastCartonKey = "";
-      userOrbit = false;
-      refresh();
-    });
+    if (els.captureSetBtn) els.captureSetBtn.addEventListener("click", captureStandardViews);
     if (els.chatBtn) els.chatBtn.addEventListener("click", () => {
       const open = els.chatBtn.getAttribute("aria-pressed") === "true";
       setDock(open ? "library" : "chat");
@@ -2048,10 +2074,14 @@
         for (let i = 0; i < shots.length; i++) {
           els.codexBtn.textContent = (i + 1) + " / " + shots.length;
           const shot = shots[i];
+          const viewId = SHOT_VIEW[shot.id] || "front-right";
+          applyViewPreset(viewId);
+          await waitFrames(3);
+          const layout = await captureViewFrame();
           const res = await fetch("/api/codex/shot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: shot.id, run, state: snap, images: extras }),
+            body: JSON.stringify({ id: shot.id, run, state: snap, images: extras, layouts: [layout] }),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -2170,11 +2200,31 @@
       renderLibrary();
     }
 
+    async function captureStandardViews() {
+      if (shotsBusy) return;
+      shotsBusy = true;
+      if (els.captureSetBtn) els.captureSetBtn.disabled = true;
+      setViewMode("3d");
+      const ids = ["front", "front-right", "front-left", "left", "right", "top", "top-open"];
+      for (let i = 0; i < ids.length; i++) {
+        if (els.captureSetBtn) els.captureSetBtn.textContent = (i + 1) + " / " + ids.length;
+        applyViewPreset(ids[i]);
+        await waitFrames(3);
+        await addCurrentShot();
+      }
+      if (els.captureSetBtn) {
+        els.captureSetBtn.textContent = "Capture 3D views";
+        els.captureSetBtn.disabled = false;
+      }
+      shotsBusy = false;
+    }
+
     async function addCurrentShot() {
       readInputs();
       const is2d = els.view2d && els.view2d.getAttribute("aria-pressed") === "true";
       const kind = is2d ? "2d" : "3d";
-      const title = cameraShotTitle();
+      const spec = VIEW_PRESETS.find((v) => v.id === activeViewId);
+      const title = is2d ? "2D - Sheet" : (spec ? spec.title : cameraShotTitle());
       renderer.render(scene, camera);
       const dataUrl = renderer.domElement.toDataURL("image/png");
       const res = await fetch("/api/views", {

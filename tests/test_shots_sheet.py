@@ -49,6 +49,32 @@ class Shots(unittest.TestCase):
         with self.assertRaises(ValueError):
             serve.shot_prompt("hero-drone", {"box": {"l": 10, "w": 10, "h": 10}})
 
+    def test_faces_beat_dieline(self):
+        state = {
+            "textureFront": "/mockups/a/front.jpg",
+            "textureBack": "/mockups/a/back.jpg",
+            "textureSide": "/mockups/a/side.jpg",
+            "textureUrl": "/mockups/a/wrap.jpg",
+        }
+        extras = ["data:image/png;base64,xx"]
+        roles = [r["role"] for r in serve.plan_shot_refs(state, extras)]
+        self.assertEqual(roles, ["front", "back", "side"])
+
+    def test_dieline_only_when_no_faces(self):
+        roles = [r["role"] for r in serve.plan_shot_refs({}, ["data:image/jpeg;base64,yy"])]
+        self.assertEqual(roles, ["dieline"])
+
+    def test_prompt_names_attached_faces(self):
+        refs = [{"role": "front"}, {"role": "back"}]
+        text = serve.shot_prompt(
+            "closed-front",
+            {"name": "OKIO 1L", "shape": "box", "box": {"l": 170, "w": 40, "h": 65}},
+            refs,
+        )
+        self.assertIn("Attached image 1 is the FRONT", text)
+        self.assertIn("Attached image 2 is the BACK", text)
+        self.assertIn("Use ONLY this attached print", text)
+
 
 class Sheet(unittest.TestCase):
     def test_glue_and_tuck(self):

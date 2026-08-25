@@ -330,7 +330,85 @@ def shot_by_id(shot_id: str) -> dict | None:
     return None
 
 
-def shot_prompt(shot_id: str, state: dict) -> str:
+REF_FACE_KEYS = (
+    ("front", "textureFront"),
+    ("back", "textureBack"),
+    ("side", "textureSide"),
+)
+ROLE_LOCK = {
+    "front": "the FRONT panel print. Put this artwork on the front face only, uncropped, same layout.",
+    "back": "the BACK panel print. Put this artwork on the back face only.",
+    "side": "the SIDE panel print. Put this artwork on both left and right side faces.",
+    "wrap": "the product wrap/label. Keep this print on the pack. Do not redesign it.",
+    "dieline": (
+        "the unfolded carton net (dieline). Mentally fold it into a 3D carton. "
+        "Do not show it flat. The tall printed face with the product photo is the front."
+    ),
+}
+
+
+def plan_shot_refs(state: dict, extras: list | None = None) -> list[dict]:
+    """Faces beat wrap beat dieline. Never mix a dieline with already-folded faces."""
+    faces = []
+    for role, key in REF_FACE_KEYS:
+        url = str((state or {}).get(key) or "").strip()
+        if url:
+            faces.append({"role": role, "url": url})
+    if faces:
+        return faces[:3]
+    wrap = str((state or {}).get("textureUrl") or "").strip()
+    if wrap:
+        return [{"role": "wrap", "url": wrap}]
+    out = []
+    for u in extras or []:
+        if not isinstance(u, str):
+            continue
+        if u.startswith("data:image") or u.startswith("/mockups/") or u.startswith("/runtime/"):
+            out.append({"role": "dieline", "url": u})
+        if len(out) >= 1:
+            break
+    return out
+
+
+def _guess_mime(path: Path, header: str = "") -> str:
+    h = (header or "").lower()
+    suf = path.suffix.lower() if path else ""
+    if "jpeg" in h or "jpg" in h or suf in (".jpg", ".jpeg"):
+        return "image/jpeg"
+    if "webp" in h or suf == ".webp":
+        return "image/webp"
+    return "image/png"
+
+
+def resolve_ref_data(url: str) -> str | None:
+    url = (url or "").strip()
+    if url.startswith("data:image"):
+        return url
+    if url.startswith("/mockups/") or url.startswith("/runtime/"):
+        path = (ROOT / url.lstrip("/")).resolve()
+        try:
+            path.relative_to(ROOT)
+        except ValueError:
+            return None
+        if not path.is_file():
+            return None
+        raw = path.read_bytes()
+        if not raw or len(raw) > 8_000_000:
+            return None
+        return "data:" + _guess_mime(path) + ";base64," + base64.b64encode(raw).decode("ascii")
+    return None
+
+
+def load_shot_refs(state: dict, extras: list | None = None) -> list[dict]:
+    loaded = []
+    for item in plan_shot_refs(state, extras):
+        data = resolve_ref_data(item["url"])
+        if data:
+            loaded.append({"role": item["role"], "data": data})
+    return loaded
+
+
+def shot_prompt(shot_id: str, state: dict, refs: list | None = None) -> str:
     spec = shot_by_id(shot_id)
     if not spec:
         raise ValueError(f"unknown shot {shot_id}")
@@ -351,11 +429,22 @@ def shot_prompt(shot_id: str, state: dict) -> str:
         if carton:
             count += f" Shipping carton inner {carton['l']:g} × {carton['w']:g} × {carton['h']:g} mm."
     shape = "cylindrical roll wrap" if state.get("shape") == "roll" else "folded printed carton"
-    return (
-        f"{spec['picture']} The product is {name}, a {shape}, {size}.{count} "
+    lock = (
         "Keep the real printed artwork and brand. No invented logos, certifications, "
         "or extra brands. No hands. Photoreal, sharp, commercial catalog quality."
     )
+    if refs:
+        lines = []
+        for i, ref in enumerate(refs, 1):
+            how = ROLE_LOCK.get(ref.get("role") or "", "a print reference. Use this artwork.")
+            lines.append(f"Attached image {i} is {how}")
+        lock = (
+            " ".join(lines)
+            + " Use ONLY this attached print. Do not redraw, restyle, or replace it. "
+            "Same colors, type, photos, and marks. Only change camera, lighting, "
+            "and whether the carton is closed, open-front, or on a shelf."
+        )
+    return f"{spec['picture']} The product is {name}, a {shape}, {size}.{count} {lock}"
 
 
 def sheet_geometry(l: float, w: float, h: float) -> dict:
@@ -556,7 +645,7 @@ def extract_image_b64(raw: str) -> str | None:
     return full or last_partial
 
 
-def generate_codex_image(prompt: str, aspect: str = "1:1") -> bytes:
+def generate_codex_image(prompt: str, aspect: str = "1:1", images: list | None = None) -> bytes:
     prompt = (prompt or "").strip()
     if not prompt:
         raise RuntimeError("Prompt required.")
@@ -566,13 +655,19 @@ def generate_codex_image(prompt: str, aspect: str = "1:1") -> bytes:
     size = AR_TO_SIZE.get(aspect, "auto")
     if size not in VALID_IMAGE_SIZES:
         size = "auto"
+    content: list[dict] = []
+    for url in (images or [])[:4]:
+        if isinstance(url, str) and url.startswith("data:image"):
+            content.append({"type": "input_image", "image_url": url, "detail": "high"})
+    content.append({"type": "input_text", "text": prompt})
     payload = {
         "model": read_codex_model(),
         "instructions": (
             "You are an image generation assistant. Use the image_generation tool to create "
-            "exactly the image the user describes. Do not ask clarifying questions; generate the image directly."
+            "exactly the image the user describes. When reference images are attached, copy "
+            "that print onto the carton. Do not invent new artwork. Do not ask clarifying questions."
         ),
-        "input": [{"type": "message", "role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+        "input": [{"type": "message", "role": "user", "content": content}],
         "tools": [{"type": "image_generation", "size": size}],
         "tool_choice": "auto",
         "parallel_tool_calls": False,
@@ -612,7 +707,7 @@ def generate_codex_image(prompt: str, aspect: str = "1:1") -> bytes:
         raise RuntimeError("Codex image was not valid base64.") from e
 
 
-def save_codex_shot(shot_id: str, state: dict, run: str) -> dict:
+def save_codex_shot(shot_id: str, state: dict, run: str, extras: list | None = None) -> dict:
     spec = shot_by_id(shot_id)
     if not spec:
         raise ValueError(f"unknown shot {shot_id}")
@@ -621,8 +716,9 @@ def save_codex_shot(shot_id: str, state: dict, run: str) -> dict:
     box = mm_triple(state.get("box"))
     if not box:
         raise ValueError("need positive retail box L, W, H")
-    prompt = shot_prompt(shot_id, state)
-    png = generate_codex_image(prompt, spec["aspect"])
+    refs = load_shot_refs(state, extras)
+    prompt = shot_prompt(shot_id, state, refs)
+    png = generate_codex_image(prompt, spec["aspect"], [r["data"] for r in refs])
     folder = CODEX_SHOTS_DIR / run
     folder.mkdir(parents=True, exist_ok=True)
     dest = folder / f"{shot_id}.png"
@@ -634,6 +730,7 @@ def save_codex_shot(shot_id: str, state: dict, run: str) -> dict:
         "prompt": prompt,
         "url": "/runtime/codex-shots/" + run + "/" + dest.name,
         "run": run,
+        "refs": [r["role"] for r in refs],
     }
 
 
@@ -1285,8 +1382,9 @@ class Handler(SimpleHTTPRequestHandler):
             shot_id = str(body.get("id") or "")
             run = str(body.get("run") or f"s{int(time.time())}")
             state = body.get("state") if isinstance(body.get("state"), dict) else {}
+            extras = body.get("images") if isinstance(body.get("images"), list) else []
             try:
-                saved = save_codex_shot(shot_id, state, run)
+                saved = save_codex_shot(shot_id, state, extras=extras, run=run)
             except ValueError as e:
                 self._json(400, {"error": str(e)})
                 return

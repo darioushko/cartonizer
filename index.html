@@ -772,7 +772,7 @@
   <dialog id="helpDialog">
     <p class="eyebrow">Help</p>
     <p>Enter retail pack millimetres and carton inner size. The 3D view shows the densest axis-aligned pack.</p>
-    <p>Photo + Send reads a dieline or Measure shot. Codex shots builds five photoreal carton images. Export sheet downloads the CAD net.</p>
+    <p>Photo + Send reads a dieline or Measure shot. Codex shots copies the loaded front/back/side print onto five photoreal carton photos. Attach a dieline only if no face art is loaded. Export sheet downloads the CAD net from millimetres, not from Codex.</p>
     <form method="dialog"><button class="export-btn" value="ok">Close</button></form>
   </dialog>
 
@@ -1813,6 +1813,18 @@
       els.codexBtn.disabled = true;
       const run = "s" + Date.now();
       try {
+        const snap = snapshotState();
+        const extras = (typeof pendingImages !== "undefined" ? pendingImages : []).filter(
+          (u) => typeof u === "string" && u.startsWith("data:image")
+        );
+        const hasFaces = !!(snap.textureFront || snap.textureBack || snap.textureSide || snap.textureUrl);
+        if (!hasFaces && !extras.length) {
+          addBubble("bot think", "No pack art loaded. Open a mockup or attach a dieline/front photo, or Codex will invent the print.");
+        } else if (hasFaces) {
+          addBubble("bot think", "Using front/back/side wrap from the loaded pack. Dieline is ignored when faces exist.");
+        } else {
+          addBubble("bot think", "Using attached photo as the dieline/print reference.");
+        }
         const metaRes = await fetch("/api/codex/shots");
         const meta = await metaRes.json();
         const shots = meta.shots || [];
@@ -1823,7 +1835,7 @@
           const res = await fetch("/api/codex/shot", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: shot.id, run, state: snapshotState() }),
+            body: JSON.stringify({ id: shot.id, run, state: snap, images: extras }),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {

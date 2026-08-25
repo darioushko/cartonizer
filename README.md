@@ -22,7 +22,7 @@ Then open [http://127.0.0.1:8765/](http://127.0.0.1:8765/).
 
 <img width="768" height="1024" alt="image" src="https://github.com/user-attachments/assets/3e4d8c0b-4e56-43d9-9120-d41a86724a9c" />
 
-Wrap chat needs a Grok Build login (`grok login`). **Codex shots** (photoreal carton photos) needs `codex login`. Auth stays in `~/.grok/auth.json` and `~/.codex/auth.json` on your machine, not in this repo.
+Wrap chat needs a Grok Build login (`grok login`). **Codex shots** needs `codex login` and copies the loaded front/back/side print onto the photos (attach a dieline only if no faces are loaded). Auth stays in `~/.grok/auth.json` and `~/.codex/auth.json` on your machine, not in this repo.
 
 **Export sheet** downloads an SVG reverse-tuck dieline of the retail box from the millimetres on the table. No login. Shape must be Box.
 

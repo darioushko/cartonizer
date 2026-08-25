@@ -58,12 +58,14 @@ SHOTS = (
     },
     {
         "id": "open-front-tray",
-        "title": "Open-front tray",
+        "title": "Open carton side",
         "aspect": "3:2",
         "picture": (
-            "Photoreal supermarket / European drugstore photo of a kraft open-front shelf-ready "
-            "display tray (PDQ). The front wall is cut down so the inner retail cartons are visible, "
-            "stacked with printed faces toward the camera."
+            "Photoreal packing-table photo of an open kraft shipping carton, camera square-on to the SIDE "
+            "(looking at the thin W × H faces of the retail packs, the way the 3D model shows the pack "
+            "from the side). The near carton wall is open or cut away. You look into the carton from the "
+            "side, not at the front print, not from above. White studio packing table. "
+            "Not a supermarket shelf, no price rail, no gondola, no second tray."
         ),
     },
     {
@@ -429,6 +431,13 @@ def shot_prompt(shot_id: str, state: dict, refs: list | None = None) -> str:
         if carton:
             count += f" Shipping carton inner {carton['l']:g} × {carton['w']:g} × {carton['h']:g} mm."
     shape = "cylindrical roll wrap" if state.get("shape") == "roll" else "folded printed carton"
+    if shot_id == "open-front-tray" and pack:
+        nx, ny, nz = pack["grid_LWH"]
+        count += (
+            f" From this side camera you see {nx} across and {nz} stacked "
+            f"({nz} high, like the 3D pack). Show the SIDE print of each unit, not the front panel. "
+            "Exact integer count, no extra boxes."
+        )
     lock = (
         "Keep the real printed artwork and brand. No invented logos, certifications, "
         "or extra brands. No hands. Photoreal, sharp, commercial catalog quality."
@@ -724,14 +733,60 @@ def save_codex_shot(shot_id: str, state: dict, run: str, extras: list | None = N
     dest = folder / f"{shot_id}.png"
     dest.write_bytes(png)
     (folder / f"{shot_id}.txt").write_text(prompt + "\n", encoding="utf-8")
+    url = "/runtime/codex-shots/" + run + "/" + dest.name
+    meta_path = folder / "run.json"
+    meta = {"run": run, "name": str(state.get("name") or ""), "shots": []}
+    if meta_path.is_file():
+        try:
+            prev = json.loads(meta_path.read_text())
+            if isinstance(prev, dict):
+                meta = {**meta, **prev, "name": str(state.get("name") or prev.get("name") or "")}
+        except json.JSONDecodeError:
+            pass
+    shots = [s for s in (meta.get("shots") or []) if isinstance(s, dict) and s.get("id") != shot_id]
+    shots.append({"id": shot_id, "title": spec["title"], "url": url})
+    meta["shots"] = shots
+    meta["updatedAt"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n")
     return {
         "id": shot_id,
         "title": spec["title"],
         "prompt": prompt,
-        "url": "/runtime/codex-shots/" + run + "/" + dest.name,
+        "url": url,
         "run": run,
         "refs": [r["role"] for r in refs],
     }
+
+
+def list_codex_runs() -> list[dict]:
+    if not CODEX_SHOTS_DIR.is_dir():
+        return []
+    runs = []
+    for folder in sorted(CODEX_SHOTS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+        if not folder.is_dir() or not SAFE_ID.match(folder.name):
+            continue
+        shots = []
+        for spec in SHOTS:
+            png = folder / f"{spec['id']}.png"
+            if png.is_file():
+                shots.append(
+                    {
+                        "id": spec["id"],
+                        "title": spec["title"],
+                        "url": f"/runtime/codex-shots/{folder.name}/{png.name}",
+                    }
+                )
+        if not shots:
+            continue
+        name = ""
+        meta_path = folder / "run.json"
+        if meta_path.is_file():
+            try:
+                name = str(json.loads(meta_path.read_text()).get("name") or "")
+            except json.JSONDecodeError:
+                pass
+        runs.append({"run": folder.name, "name": name, "shots": shots})
+    return runs[:40]
 
 
 GROUPS = ["10L", "25L", "50L", "Ziploc", "Frischhaltefolie"]
@@ -1311,6 +1366,9 @@ class Handler(SimpleHTTPRequestHandler):
         path = posixpath.normpath(urllib.parse.urlparse(self.path).path)
         if path == "/api/codex/shots":
             self._json(200, {"shots": [{"id": s["id"], "title": s["title"], "aspect": s["aspect"]} for s in SHOTS]})
+            return
+        if path == "/api/codex/runs":
+            self._json(200, {"runs": list_codex_runs()})
             return
         if path == "/api/sheet.svg":
             qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)

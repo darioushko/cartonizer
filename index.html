@@ -514,6 +514,49 @@
       gap: 8px;
     }
     #grokLog:empty { display: none; }
+    #shotGallery {
+      max-height: 220px;
+      overflow: auto;
+      padding: 8px 16px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #shotGallery:empty { display: none; }
+    .shot-run {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--label);
+      margin: 4px 0 0;
+    }
+    .shot-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+    }
+    .shot-row a {
+      flex: 0 0 auto;
+      text-decoration: none;
+      color: inherit;
+    }
+    .shot-row img {
+      width: 112px;
+      height: 76px;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      display: block;
+    }
+    .shot-row span {
+      display: block;
+      font-size: 11px;
+      color: var(--mute);
+      margin-top: 4px;
+      max-width: 112px;
+    }
     .bubble {
       max-width: 92%;
       padding: 8px 10px;
@@ -731,6 +774,7 @@
         <span id="grokStatus">connecting…</span>
       </div>
       <div id="grokLog"></div>
+      <div id="shotGallery" aria-label="Saved Codex shots"></div>
       <form id="grokForm">
         <button type="button" id="attachBtn">Photo</button>
         <textarea id="grokText" rows="1" placeholder="Dieline, measure photos, or product shot. Fold the pack, estimate the roll, pack the carton."></textarea>
@@ -848,6 +892,7 @@
       shapeBox: $("shapeBox"),
       shapeRoll: $("shapeRoll"),
       grokLog: $("grokLog"),
+      shotGallery: $("shotGallery"),
       grokText: $("grokText"),
       grokForm: $("grokForm"),
       grokSend: $("grokSend"),
@@ -1773,6 +1818,7 @@
       refreshMockups();
     });
     refreshMockups();
+    loadShotGallery();
 
     els.pngBtn.addEventListener("click", () => {
       renderer.render(scene, camera);
@@ -1860,6 +1906,7 @@
           els.grokLog.scrollTop = els.grokLog.scrollHeight;
         }
         els.grokStatus.textContent = "Codex shots done";
+        loadShotGallery();
       } catch (err) {
         addBubble("bot think", "Codex shots need the local server (python3 serve.py). " + err.message);
       }
@@ -1870,6 +1917,39 @@
 
     let pendingImages = [];
     let grokBusy = false;
+
+    async function loadShotGallery() {
+      if (!els.shotGallery) return;
+      try {
+        const res = await fetch("/api/codex/runs");
+        const data = await res.json();
+        const runs = data.runs || [];
+        els.shotGallery.innerHTML = "";
+        runs.forEach((run) => {
+          const head = document.createElement("p");
+          head.className = "shot-run";
+          head.textContent = (run.name || "Shots") + " · " + run.run;
+          const row = document.createElement("div");
+          row.className = "shot-row";
+          (run.shots || []).forEach((shot) => {
+            const a = document.createElement("a");
+            a.href = shot.url;
+            a.target = "_blank";
+            a.rel = "noopener";
+            const img = document.createElement("img");
+            img.src = shot.url;
+            img.alt = shot.title || shot.id;
+            const cap = document.createElement("span");
+            cap.textContent = shot.title || shot.id;
+            a.append(img, cap);
+            row.appendChild(a);
+          });
+          els.shotGallery.append(head, row);
+        });
+      } catch {
+        /* server offline */
+      }
+    }
 
     function addBubble(kind, text, imgs) {
       const div = document.createElement("div");

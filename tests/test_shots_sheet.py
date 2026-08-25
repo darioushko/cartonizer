@@ -42,8 +42,22 @@ class Shots(unittest.TestCase):
         self.assertIn("170", text)
         self.assertIn("40", text)
         self.assertIn("65", text)
-        self.assertIn("PDQ", text)
+        self.assertIn("SIDE", text)
+        self.assertIn("stacked", text.lower())
         self.assertIn("no invented logos", text.lower())
+
+    def test_open_carton_side_uses_grid(self):
+        text = serve.shot_prompt(
+            "open-front-tray",
+            {
+                "name": "OKIO 1L",
+                "shape": "box",
+                "box": {"l": 170, "w": 40, "h": 65},
+                "carton": {"l": 160, "w": 170, "h": 195},
+            },
+        )
+        self.assertIn("3 stacked", text)
+        self.assertIn("not a supermarket shelf", text.lower())
 
     def test_unknown_shot(self):
         with self.assertRaises(ValueError):

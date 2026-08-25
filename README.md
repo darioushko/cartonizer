@@ -7,7 +7,7 @@ It does two jobs:
 1. **Packaging preview.** From photos, a dieline, or typed sizes, the local Python server asks an image model for wrap/front/back/side artwork so you can see a printed carton before anything is produced.
 2. **Industrial carton math.** You enter the retail pack size and the shipping carton inner size. The tool tries all six axis-aligned orientations, picks the densest regular grid, and shows how many units fit, leftover millimetres, and fill percent. Change bag count, film, or carton size to compare configurations.
 
-The published repo is the **plain tool**: app + schema, no personal SKUs, mockups, quotes, or factory reports.
+The published repo is the **plain tool**: app + schema, without any samples. 
 
 ## Run
 
